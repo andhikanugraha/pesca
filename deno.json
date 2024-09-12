@@ -1,0 +1,18 @@
+{
+  "imports": {
+    "@std/csv": "jsr:@std/csv@^1.0.2",
+    "@std/fs": "jsr:@std/fs@^1.0.2",
+    "@std/path": "jsr:@std/path@^1.0.3",
+    "@std/streams": "jsr:@std/streams@^1.0.3",
+    "@std/toml": "jsr:@std/toml@^1.0.1",
+    "cheerio": "npm:cheerio@^1.0.0",
+    "get-stream": "npm:get-stream@^9.0.1",
+    "playwright": "npm:playwright@^1.46.0",
+    "tasuku": "npm:tasuku@^2.0.1"
+  },
+  "tasks": {
+    "init-actual": "cd lib/actual && npm i",
+    "start": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --unstable-temporal index.ts"
+  },
+  "nodeModulesDir": false
+}
