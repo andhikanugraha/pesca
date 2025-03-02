@@ -14,5 +14,5 @@
     "init-actual": "cd lib/actual && npm i",
     "start": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --unstable-temporal index.ts"
   },
-  "nodeModulesDir": "none"
+  "nodeModulesDir": "auto"
 }
