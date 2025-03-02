@@ -22,6 +22,11 @@ export interface Config {
   sources: SourceParams[];
 }
 
+async function init1Password() {
+  const command = new Deno.Command("op", { args: ["signin"] });
+  await command.output();
+}
+
 async function fetch1PasswordCredential(
   opSecretReferenceBase: string,
   field: string,
@@ -71,6 +76,8 @@ async function resolveSources(
   },
 ) {
   const sources = config.sources as UnresolvedSourceParams[];
+
+  await init1Password();
 
   await task.group((task) =>
     sources.map((source) =>
