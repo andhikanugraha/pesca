@@ -1,6 +1,5 @@
 import { stringify as stringifyCsv } from "@std/csv";
 import { ensureFile } from "@std/fs";
-import { parse as parseToml } from "@std/toml";
 import task from "tasuku";
 
 import type {
@@ -11,12 +10,11 @@ import type {
   Transaction,
 } from "./lib.ts";
 
-import { resolveConfig, type Config } from "./config.ts";
+import { type Config, resolveConfig } from "./config.ts";
 import { withBrowserContext, type WithPage } from "./browser.ts";
 
 import citi from "./drivers/citi.ts";
 import dbs from "./drivers/dbs.ts";
-import { resolve } from "@std/path";
 
 function selectDriver(
   source: SourceParams,
@@ -93,7 +91,7 @@ async function processSource({
 
         outputs.push(output);
       } catch (e) {
-        setError(e);
+        setError(e as Error);
       }
     });
   } catch {
@@ -209,15 +207,7 @@ async function executePull(config: Config, artifactBasePath: string) {
   });
 }
 
-export default async function main(pathToConfigToml: string) {
-  pathToConfigToml = resolve(Deno.cwd(), pathToConfigToml);
-  let unresolvedConfig: Record<string, unknown> = {};
-
-  await task(`Reading ${pathToConfigToml}`, async () => {
-    const tomlString = await Deno.readTextFile(pathToConfigToml);
-    unresolvedConfig = parseToml(tomlString);
-  });
-
+export async function createOperator(unresolvedConfig: Record<string, unknown>) {
   const configTask = await task(
     "Resolving configuration",
     async ({ task }): Promise<[Config, string]> => {
@@ -228,5 +218,9 @@ export default async function main(pathToConfigToml: string) {
   );
 
   const [config, outputBasePath] = configTask.result;
-  await executePull(config, outputBasePath);
+  return {
+    async pull() {
+      await executePull(config, outputBasePath);
+    }
+  }
 }

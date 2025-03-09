@@ -1,6 +1,6 @@
 import { resolve } from "@std/path";
 import { parse } from "@std/toml";
-import { createOperator } from "./lib/operator.ts";
+import { createOperator } from "./lib/operator/operator.ts";
 import task from "tasuku";
 
 main("pesca.toml");
