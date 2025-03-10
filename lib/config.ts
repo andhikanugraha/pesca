@@ -1,7 +1,7 @@
 import { resolve } from "@std/path";
 import { ensureDir } from "@std/fs";
 
-import type { Task } from "./lib.ts";
+import type { Task } from "tasuku";
 
 export interface SourceParams {
   key: string;

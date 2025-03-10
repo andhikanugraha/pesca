@@ -1,9 +1,8 @@
 import { resolve } from "@std/path";
 import { parse } from "@std/toml";
 import { createOperator } from "./lib/operator/operator.ts";
+import createServer from "./lib/server/server.tsx";
 import task from "tasuku";
-
-main("pesca.toml");
 
 async function main(pathToConfigToml = "pesca.toml") {
   pathToConfigToml = resolve(Deno.cwd(), pathToConfigToml);
@@ -14,9 +13,17 @@ async function main(pathToConfigToml = "pesca.toml") {
     unresolvedConfig = parse(tomlString);
   });
 
-  const operator = await createOperator(unresolvedConfig);
+  const operator = (await task('Instantiating Operator', () => {
+    return createOperator(unresolvedConfig);
+  })).result;
 
-  while (confirm('\nPull?')) {
-    await operator.pull();
+  if (operator) {
+    task("Creating server", async ({ setTitle }) => {
+      const server = await createServer({ operator });
+      const s = Deno.serve(server.fetch);
+      setTitle(`Listening to ${s.addr.hostname}:${s.addr.port}`);
+    });
   }
 }
+
+main(...Deno.args);

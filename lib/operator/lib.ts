@@ -1,12 +1,12 @@
 import type { Task } from "tasuku";
 import type { Page } from "playwright";
-import type { UnresolvedSourceParams } from "./config.ts";
+import type { UnresolvedSourceParams } from "../config.ts";
 import { Transaction } from "./transaction.ts";
 
 export type { Task };
 export { Transaction };
 
-export type { SourceParams } from "./config.ts";
+export type { SourceParams } from "../config.ts";
 
 export interface ScraperParams {
   source: UnresolvedSourceParams;

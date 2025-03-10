@@ -1,226 +1,87 @@
-import { stringify as stringifyCsv } from "@std/csv";
-import { ensureFile } from "@std/fs";
 import task from "tasuku";
+import { JsonParseStream } from "@std/json";
 
-import type {
-  DriverDefinition,
-  DriverOutput,
-  SourceParams,
-  Task,
-  Transaction,
-} from "./lib.ts";
+import { type Config, resolveConfig } from "../config.ts";
+import { executePull } from "./pull.ts";
 
-import { type Config, resolveConfig } from "./config.ts";
-import { withBrowserContext, type WithPage } from "./browser.ts";
+export type Operator = {
+  pull: () => Promise<boolean>;
+};
 
-import citi from "./drivers/citi.ts";
-import dbs from "./drivers/dbs.ts";
-
-function selectDriver(
-  source: SourceParams,
-): DriverDefinition | undefined {
-  const drivers = [citi, dbs];
-  for (const driver of drivers) {
-    if (driver.supportsSource(source)) {
-      return driver;
-    }
-  }
-}
-
-function getOutputBasePath({ config }: { config: Config }): string {
-  const now = Temporal.Now.plainDateTimeISO();
-  const month = now.month.toString().padStart(2, "0");
-  const day = now.day.toString().padStart(2, "0");
-  const hour = now.hour.toString().padStart(2, "0");
-  const minute = now.minute.toString().padStart(2, "0");
-  const second = now.second.toString().padStart(2, "0");
-  const timedir = `${now.year}-${month}-${day}T${hour}.${minute}.${second}`;
-
-  const artifactBasePath = `${config.outputPath}/${timedir}`;
-
-  return artifactBasePath;
-}
-
-async function processSource({
-  source,
-  setError,
-  withPage,
-  task,
-  artifactBasePath,
-  outputs,
-}: {
-  source: SourceParams;
-  setError: (e?: Error | string) => void;
-  withPage: WithPage;
-  task: Task;
-  artifactBasePath: string;
-  outputs: DriverOutput[];
-}): Promise<void> {
-  const { key } = source;
-
-  const driver = selectDriver(source);
-  if (!driver) {
-    setError(`No matching driver for source: ${key}`);
-    return;
-  }
-
-  async function storeArtifact(name: string, contents: string | Uint8Array) {
-    await task(
-      `Storing artifact ${name}`,
-      async () => {
-        const path = `${artifactBasePath}/${key}/${name}`;
-        await ensureFile(path);
-        if (typeof contents === "string") {
-          await Deno.writeTextFile(path, contents);
-        } else {
-          await Deno.writeFile(path, contents);
-        }
-      },
-    );
-  }
-
-  try {
-    await withPage(async (page) => {
-      try {
-        const output = await driver.pull({
-          source,
-          task,
-          page,
-          storeArtifact,
-        });
-
-        outputs.push(output);
-      } catch (e) {
-        setError(e as Error);
-      }
-    });
-  } catch {
-    setError(`Failed processing source: ${key}`);
-  }
-}
-
-async function writeCombinedOutput(
-  { artifactBasePath, outputs }: {
-    artifactBasePath: string;
-    outputs: DriverOutput[];
-  },
-) {
-  const transactions: Transaction[] = [];
-  for (const output of outputs) {
-    transactions.push(...output.transactions);
-  }
-
-  if (transactions.length === 0) {
-    return;
-  }
-
-  transactions.sort((a, b) => {
-    // Sort in descending order
-    return Temporal.PlainDate.compare(a.date, b.date);
-  });
-
-  const path = `${artifactBasePath}/transactions.csv`;
-  await ensureFile(path);
-  await Deno.writeTextFile(
-    path,
-    stringifyCsv(
-      transactions.map((t) => [
-        t.date.toString(),
-        t.description,
-        t.amount,
-        t.account,
-        t.isPending ? "pending" : "cleared",
-      ]),
-    ),
-  );
-}
-
-async function processSources({
-  config,
-  task,
-  artifactBasePath,
-  withPage,
-}: {
+type Payload = {
   config: Config;
-  task: Task;
-  artifactBasePath: string;
-  withPage: WithPage;
-}): Promise<DriverOutput[]> {
-  const outputs: DriverOutput[] = [];
-  await task.group((task) =>
-    config.sources.map((source) => {
-      return task(
-        `Processing source: ${source.key}`,
-        ({ task, setError }) =>
-          processSource({
-            source,
-            withPage,
-            task,
-            setError,
-            outputs,
-            artifactBasePath,
-          }),
-      );
-    })
-  );
+  command: "pull";
+};
 
-  return outputs;
-}
+const TIMEOUT = 5 * 60 * 1000;
 
-async function writeSyncPlaceholder(
-  { artifactBasePath, outputs }: {
-    artifactBasePath: string;
-    outputs: DriverOutput[];
-  },
-) {
-  const transactions: Transaction[] = [];
-  for (const output of outputs) {
-    transactions.push(...output.transactions);
-  }
+const childFlags = [
+  "--allow-read",
+  "--allow-write",
+  "--allow-sys",
+  "--allow-env",
+  "--allow-run",
+  "--unstable-temporal",
+];
 
-  if (transactions.length === 0) {
-    return;
-  }
-
-  transactions.sort((a, b) => Temporal.PlainDate.compare(a.date, b.date));
-
-  const contentObject = { transactions };
-  const contentString = JSON.stringify(contentObject, null, 2);
-
-  const file = `${artifactBasePath}/output.json`;
-
-  await ensureFile(file);
-  await Deno.writeTextFile(file, contentString);
-}
-
-async function executePull(config: Config, artifactBasePath: string) {
-  const { profilePath } = config;
-  await withBrowserContext({ profilePath }, async (withPage) => {
-    const outputs = await processSources({
-      config,
-      task,
-      artifactBasePath,
-      withPage,
-    });
-    await writeCombinedOutput({ artifactBasePath, outputs });
-    await writeSyncPlaceholder({ artifactBasePath, outputs });
+async function spawnSelf(payload: Payload) {
+  const command = new Deno.Command(Deno.execPath(), {
+    args: [
+      "run",
+      ...childFlags,
+      import.meta.filename as string,
+    ],
+    stdin: "piped",
   });
+  const child = command.spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(JSON.stringify(payload)));
+  return child;
 }
 
-export async function createOperator(unresolvedConfig: Record<string, unknown>) {
+export async function createOperator(
+  unresolvedConfig: Record<string, unknown>,
+): Promise<Operator> {
   const configTask = await task(
     "Resolving configuration",
-    async ({ task }): Promise<[Config, string]> => {
-      const config = await resolveConfig({ config: unresolvedConfig, task });
-      const outputBasePath = getOutputBasePath({ config });
-      return [config, outputBasePath];
-    },
+    ({ task }): Promise<Config> =>
+      resolveConfig({ config: unresolvedConfig, task }),
   );
 
-  const [config, outputBasePath] = configTask.result;
+  const config = configTask.result;
+
   return {
-    async pull() {
-      await executePull(config, outputBasePath);
+    async pull(): Promise<boolean> {
+      try {
+        const child = await spawnSelf({ config, command: "pull" });
+        await child.output();
+        const status = await child.status;
+        return status.success;
+      } catch (_e) {
+        // do nothing
+        return false;
+      }
+    },
+  };
+}
+
+async function main() {
+  const stdin = Deno.stdin.readable.pipeThrough(new TextDecoderStream());
+  const stdinJson = stdin.pipeThrough(new JsonParseStream()).getReader();
+
+  const payload = await stdinJson.read();
+  const { config, command } = payload.value as object as Payload;
+
+  if (command === "pull") {
+    try {
+      setTimeout(() => Deno.exit(1), TIMEOUT);
+      await executePull(config);
+    } catch (_e) {
+      Deno.exit(1);
     }
   }
+}
+
+if (import.meta.main) {
+  await main();
 }
