@@ -3,7 +3,7 @@ import { serveStatic } from "hono/deno";
 import { relative, resolve } from "@std/path";
 import { type ReactNode } from "hono/jsx";
 
-import type { Operator } from "../operator/operator.ts";
+import { Scheduler } from "../scheduler.ts";
 
 function serveFile(path: string) {
   const relativePath = relative(
@@ -24,23 +24,44 @@ function Layout({ children }: { children: ReactNode }) {
   );
 }
 
-function PullButton() {
+function Commands() {
   return (
-    <form action="/pull" method="post">
+    <>
+      <form action="/run" method="post" id="run-form" />
+      <form action="/abort" method="post" id="abort-form" />
       <p>
         <button
           type="submit"
-          style="font-size: 1.2em; padding-left: 2em; padding-right: 2em;"
+          style="font-size: 1.2em; padding-left: 2em; padding-right: 2em; margin-right: 1em"
+          form="run-form"
         >
-          Pull
+          Run
+        </button>
+        &nbsp;
+        <button
+          type="submit"
+          style="font-size: 1.2em; padding-left: 2em; padding-right: 2em;"
+          form="abort-form"
+        >
+          Abort
         </button>
       </p>
-    </form>
+    </>
   );
 }
 
+function Time({ children }: { children?: Temporal.ZonedDateTime }) {
+  if (!children) {
+    return <time />;
+  }
+
+  const datetime = children.toString({ timeZoneName: "never" });
+  const text = children.toLocaleString();
+  return <time datetime={datetime}>{text}</time>;
+}
+
 export default function createServer(
-  { operator }: { operator: Operator },
+  { scheduler }: { scheduler: Scheduler },
 ): Hono {
   const app = new Hono();
 
@@ -54,26 +75,51 @@ export default function createServer(
     await next();
   });
 
-  app.get("/", (c) => c.render(<PullButton />));
+  app.get("/", (c) =>
+    c.render(
+      <>
+        <p>
+          Next: <Time>{scheduler.nextOccurrence}</Time>
+        </p>
+        {scheduler.lastSuccessfulOccurrence && (
+          <p>
+            Last successful occurrence:{" "}
+            <Time>{scheduler.lastSuccessfulOccurrence}</Time>
+          </p>
+        )}
+        {scheduler.lastFailedOccurrence && (
+          <p>
+            Last successful occurrence:{" "}
+            <Time>{scheduler.lastFailedOccurrence}</Time>
+          </p>
+        )}
+        <Commands />,
+      </>,
+    ));
 
   // Operator commands
-  app.post("/pull", async (c) => {
-    const success = await operator.pull();
+  app.post("/run", async (c) => {
+    const success = await scheduler.run();
     if (success) {
       return c.render(
         <>
           <p>✅ Pulling was successful.</p>
-          <PullButton />
+          <Commands />
         </>,
       );
     } else {
       return c.render(
         <>
           <p>❌ Pulling was not successful.</p>
-          <PullButton />
+          <Commands />
         </>,
       );
     }
+  });
+
+  app.post("/abort", (c) => {
+    scheduler.abort();
+    return c.redirect("/");
   });
 
   return app;

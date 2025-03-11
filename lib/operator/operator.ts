@@ -5,7 +5,7 @@ import { type Config, resolveConfig } from "../config.ts";
 import { executePull } from "./pull.ts";
 
 export type Operator = {
-  pull: () => Promise<boolean>;
+  pull: ({ signal }: { signal: AbortSignal }) => Promise<boolean>;
 };
 
 type Payload = {
@@ -24,7 +24,7 @@ const childFlags = [
   "--unstable-temporal",
 ];
 
-async function spawnSelf(payload: Payload) {
+async function spawnSelf(payload: Payload, signal: AbortSignal) {
   const command = new Deno.Command(Deno.execPath(), {
     args: [
       "run",
@@ -34,6 +34,9 @@ async function spawnSelf(payload: Payload) {
     stdin: "piped",
   });
   const child = command.spawn();
+
+  signal.onabort = () => child.kill();
+
   const writer = child.stdin.getWriter();
   await writer.write(new TextEncoder().encode(JSON.stringify(payload)));
   return child;
@@ -51,9 +54,9 @@ export async function createOperator(
   const config = configTask.result;
 
   return {
-    async pull(): Promise<boolean> {
+    async pull({ signal }): Promise<boolean> {
       try {
-        const child = await spawnSelf({ config, command: "pull" });
+        const child = await spawnSelf({ config, command: "pull" }, signal);
         await child.output();
         const status = await child.status;
         return status.success;
