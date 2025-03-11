@@ -3,17 +3,24 @@ import { JsonParseStream } from "@std/json";
 
 import { type Config, resolveConfig } from "../config.ts";
 import { executePull } from "./pull.ts";
+import { executeConsolidation } from "./consolidate.ts";
 
 export type Operator = {
+  run: (
+    { commands, signal }: { commands?: Command[]; signal: AbortSignal },
+  ) => Promise<boolean>;
   pull: ({ signal }: { signal: AbortSignal }) => Promise<boolean>;
+  consolidate: ({ signal }: { signal: AbortSignal }) => Promise<boolean>;
 };
+
+type Command = "pull" | "consolidate";
 
 type Payload = {
   config: Config;
-  command: "pull";
+  commands: Command[];
 };
 
-const TIMEOUT = 5 * 60 * 1000;
+const TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 const childFlags = [
   "--allow-read",
@@ -35,7 +42,13 @@ async function spawnSelf(payload: Payload, signal: AbortSignal) {
   });
   const child = command.spawn();
 
-  signal.onabort = () => child.kill();
+  let killed = false;
+  signal.onabort = () => {
+    if (!killed) {
+      child.kill();
+      killed = true;
+    }
+  };
 
   const writer = child.stdin.getWriter();
   await writer.write(new TextEncoder().encode(JSON.stringify(payload)));
@@ -53,38 +66,49 @@ export async function createOperator(
 
   const config = configTask.result;
 
-  return {
-    async pull({ signal }): Promise<boolean> {
-      try {
-        const child = await spawnSelf({ config, command: "pull" }, signal);
-        await child.output();
-        const status = await child.status;
-        return status.success;
-      } catch (_e) {
-        // do nothing
-        return false;
-      }
+  async function run(
+    { commands = ["pull", "consolidate"], signal }: {
+      commands?: Command[];
+      signal: AbortSignal;
     },
+  ): Promise<boolean> {
+    try {
+      const child = await spawnSelf({ config, commands }, signal);
+      await child.output();
+      const status = await child.status;
+      return status.success;
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  return {
+    run,
+    pull: ({ signal }) => run({ commands: ["pull"], signal }),
+    consolidate: ({ signal }) => run({ commands: ["consolidate"], signal }),
   };
 }
 
 async function main() {
   const stdin = Deno.stdin.readable.pipeThrough(new TextDecoderStream());
   const stdinJson = stdin.pipeThrough(new JsonParseStream()).getReader();
-
   const payload = await stdinJson.read();
-  const { config, command } = payload.value as object as Payload;
+  const { config, commands } = payload.value as object as Payload;
 
-  if (command === "pull") {
-    try {
-      setTimeout(() => Deno.exit(1), TIMEOUT);
+  try {
+    setTimeout(() => Deno.exit(1), TIMEOUT);
+    if (commands.includes("pull")) {
       await executePull(config);
-    } catch (_e) {
-      Deno.exit(1);
     }
+    if (commands.includes("consolidate")) {
+      await executeConsolidation(config);
+    }
+    Deno.exit(0);
+  } catch (_e) {
+    Deno.exit(1);
   }
 }
 
 if (import.meta.main) {
-  await main();
+  main();
 }

@@ -175,7 +175,8 @@ textarea {
 
 .button, button, input[type=submit], input[type=reset], input[type=button], input[type=file]::file-selector-button {
   display: inline-block;
-  padding: 5px 10px;
+  padding: 5px 20px;
+  margin-right: 10px;
   text-align: center;
   text-decoration: none;
   white-space: nowrap;
@@ -185,6 +186,7 @@ textarea {
   border: 1px solid #007559;
   cursor: pointer;
   box-sizing: border-box;
+  font-size: 1.2em;
 }
 .button[disabled], button[disabled], input[type=submit][disabled], input[type=reset][disabled], input[type=button][disabled], input[type=file]::file-selector-button[disabled] {
   cursor: default;

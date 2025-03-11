@@ -14,16 +14,14 @@ async function main(pathToConfigToml = "pesca.toml") {
     unresolvedConfig = parse(tomlString);
   });
 
-  const operator = (await task("Instantiating Operator", () => {
-    return createOperator(unresolvedConfig);
-  })).result;
+  const operator = await createOperator(unresolvedConfig);
 
-  const scheduler = createScheduler(({ signal }) => operator.pull({ signal }));
+  const scheduler = createScheduler(({ signal }) => operator.run({ signal }));
 
   if (operator) {
     // deno-lint-ignore require-await
     task("Creating server", async ({ setTitle }) => {
-      const server = createServer({ scheduler });
+      const server = createServer({ scheduler, operator });
       scheduler.start();
       const s = Deno.serve(server.fetch);
       setTitle(`Listening to ${s.addr.hostname}:${s.addr.port}`);

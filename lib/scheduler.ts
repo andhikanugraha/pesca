@@ -1,6 +1,6 @@
 export type Scheduler = {
   start: () => void;
-  run: () => Promise<boolean>;
+  run: (customCallback?: ({ signal }: { signal: AbortSignal }) => Promise<boolean>) => Promise<boolean>;
   abort: () => void;
   get isRunning(): boolean;
   get durationUntilNext(): Temporal.Duration;
@@ -35,7 +35,9 @@ export function createScheduler(
 
   let abortController: AbortController;
 
-  async function run() {
+  async function run(
+    customCallback?: ({ signal }: { signal: AbortSignal }) => Promise<boolean>,
+  ) {
     const now = Temporal.Now.zonedDateTimeISO();
 
     isRunning = true;
@@ -44,7 +46,12 @@ export function createScheduler(
     const signal = abortController.signal;
     signal.onabort = () => isRunning = false;
 
-    const success = await callback({ signal: abortController.signal });
+    let success: boolean;
+    if (customCallback) {
+      success = await customCallback({ signal });
+    } else {
+      success = await callback({ signal: abortController.signal });
+    }
 
     isRunning = false;
 

@@ -1,8 +1,7 @@
-import { stringify as stringifyCsv } from "@std/csv";
 import { ensureFile } from "@std/fs";
 import task from "tasuku";
 
-import type {
+import {
   DriverDefinition,
   DriverOutput,
   SourceParams,
@@ -114,25 +113,18 @@ async function writeCombinedOutput(
     return;
   }
 
-  transactions.sort((a, b) => {
+  transactions.sort((a, b) => (
     // Sort in descending order
-    return Temporal.PlainDate.compare(a.date, b.date);
-  });
+    Temporal.PlainDate.compare(a.date, b.date)
+  ));
 
   const path = `${artifactBasePath}/transactions.csv`;
   await ensureFile(path);
-  await Deno.writeTextFile(
-    path,
-    stringifyCsv(
-      transactions.map((t) => [
-        t.date.toString(),
-        t.description,
-        t.amount,
-        t.account,
-        t.isPending ? "pending" : "cleared",
-      ]),
-    ),
-  );
+
+  const handle = await Deno.open(path, { write: true });
+  Transaction.toCsvStream(transactions)
+    .pipeThrough(new TextEncoderStream())
+    .pipeTo(handle.writable);
 }
 
 async function processSources({

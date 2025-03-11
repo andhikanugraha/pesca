@@ -121,7 +121,7 @@ function createStdinReadableStream() {
 }
 
 async function nodeJsMain() {
-  const api = await import("@actual-app/api");
+  // const api = await import("@actual-app/api");
 
   const paramsString = process.env[PARAMS_ENV];
   if (!paramsString) {

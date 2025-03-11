@@ -1,0 +1,6 @@
+{
+    "config": {
+        "outputPath": "./output"
+    },
+    "commands": ["consolidate"]
+}

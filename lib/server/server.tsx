@@ -3,7 +3,8 @@ import { serveStatic } from "hono/deno";
 import { relative, resolve } from "@std/path";
 import { type ReactNode } from "hono/jsx";
 
-import { Scheduler } from "../scheduler.ts";
+import { type Scheduler } from "../scheduler.ts";
+import { type Operator } from "../operator/operator.ts";
 
 function serveFile(path: string) {
   const relativePath = relative(
@@ -27,25 +28,23 @@ function Layout({ children }: { children: ReactNode }) {
 function Commands() {
   return (
     <>
-      <form action="/run" method="post" id="run-form" />
-      <form action="/abort" method="post" id="abort-form" />
-      <p>
-        <button
-          type="submit"
-          style="font-size: 1.2em; padding-left: 2em; padding-right: 2em; margin-right: 1em"
-          form="run-form"
-        >
-          Run
-        </button>
-        &nbsp;
-        <button
-          type="submit"
-          style="font-size: 1.2em; padding-left: 2em; padding-right: 2em;"
-          form="abort-form"
-        >
-          Abort
-        </button>
-      </p>
+      <form action="/run" method="post">
+        <p>
+          <button type="submit" name="task" value="run">Run</button>
+          &nbsp;
+          <button type="submit" name="task" value="pull">
+            Pull Only
+          </button>
+          &nbsp;
+          <button type="submit" name="task" value="consolidate">
+            Consolidate Only
+          </button>
+          &nbsp;
+          <button type="submit" name="task" value="abort">
+            Abort
+          </button>
+        </p>
+      </form>
     </>
   );
 }
@@ -61,7 +60,7 @@ function Time({ children }: { children?: Temporal.ZonedDateTime }) {
 }
 
 export default function createServer(
-  { scheduler }: { scheduler: Scheduler },
+  { scheduler, operator }: { scheduler: Scheduler; operator: Operator },
 ): Hono {
   const app = new Hono();
 
@@ -99,18 +98,34 @@ export default function createServer(
 
   // Operator commands
   app.post("/run", async (c) => {
-    const success = await scheduler.run();
+    const body = await c.req.formData();
+    const task = body.get("task");
+
+    if (task === "abort") {
+      scheduler.abort();
+      return c.redirect("/");
+    }
+
+    let success: boolean;
+    if (task === "pull") {
+      success = await scheduler.run(operator.pull);
+    } else if (task === "consolidate") {
+      success = await scheduler.run(operator.consolidate);
+    } else {
+      success = await scheduler.run();
+    }
+
     if (success) {
       return c.render(
         <>
-          <p>✅ Pulling was successful.</p>
+          <p>✅ Operation was successful.</p>
           <Commands />
         </>,
       );
     } else {
       return c.render(
         <>
-          <p>❌ Pulling was not successful.</p>
+          <p>❌ Operation was not successful.</p>
           <Commands />
         </>,
       );
