@@ -14,7 +14,7 @@ function deduplicateTransactions(
   const deduplicatedTransactions: Transaction[] = [];
 
   for (const [filePath, transactions] of fileTransactionsMap.entries()) {
-    for (const transaction of transactions) {
+    for (const transaction of transactions.filter((t) => !t.isPending)) {
       const { date, description, account } = transaction;
 
       const transactionKey =
@@ -68,7 +68,8 @@ export async function executeConsolidation(config: Config) {
   const deduplicatedTransactions = await processArtifacts(paths);
 
   // Consolidated CSV
-  const outCsvPath = resolve(outputPath, "consolidated.csv");
+  const outCsvPath = resolve(outputPath, "_consolidated", "consolidated.csv");
+  const outJsonPath = resolve(outputPath, "_consolidated", "consolidated.json");
   await ensureFile(outCsvPath);
   using outCsv = await Deno.open(outCsvPath, { write: true });
   await Transaction.toCsvStream(deduplicatedTransactions)
@@ -76,10 +77,12 @@ export async function executeConsolidation(config: Config) {
     .pipeTo(outCsv.writable);
 
   // Consolidated JSON
+  await ensureFile(outJsonPath);
   await Deno.writeTextFile(
-    resolve(outputPath, "consolidated.json"),
+    outJsonPath,
     JSON.stringify({
+      updatedAt: Temporal.Now.zonedDateTimeISO().toString({ timeZoneName: "never" }),
       transactions: deduplicatedTransactions,
-    }),
+    }, null, 2),
   );
 }
