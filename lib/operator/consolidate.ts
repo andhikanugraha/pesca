@@ -74,7 +74,7 @@ export async function executeConsolidation(config: Config) {
   const outXlsxPath = resolve(outputPath, "_consolidated", "consolidated.xlsx");
 
   // Consolidated JSON
-  task("Generating consolidated.json", async () => {
+  await task("Generating consolidated.json", async () => {
     await ensureFile(outJsonPath);
     await Deno.writeTextFile(
       outJsonPath,
@@ -92,7 +92,7 @@ export async function executeConsolidation(config: Config) {
   });
 
   // Consolidated CSV
-  task("Generating consolidated.csv", async () => {
+  await task("Generating consolidated.csv", async () => {
     await ensureFile(outCsvPath);
     using outCsv = await Deno.open(outCsvPath, { write: true });
     await Transaction.toCsvStream(deduplicatedTransactions)
@@ -101,7 +101,7 @@ export async function executeConsolidation(config: Config) {
   });
 
   // Consolidated XLSX
-  task("Generating consolidated.xlsx", async () => {
+  await task("Generating consolidated.xlsx", async () => {
     await ensureFile(outXlsxPath);
     const xlsxU8 = generateWorkbook(deduplicatedTransactions);
     await Deno.writeFile(outXlsxPath, xlsxU8);

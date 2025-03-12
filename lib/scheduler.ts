@@ -108,7 +108,7 @@ export function createScheduler(
   function abort() {
     if (abortController) {
       abortController.abort();
-      lastSuccessfulOccurrence = Temporal.Now.zonedDateTimeISO(tz);
+      lastFailedOccurrence = Temporal.Now.zonedDateTimeISO(tz);
     }
   }
 

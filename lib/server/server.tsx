@@ -58,7 +58,10 @@ function Commands() {
 }
 
 function Time(
-  { children }: { children: Temporal.ZonedDateTime | null | undefined },
+  { children, tense = "auto" }: {
+    children: Temporal.ZonedDateTime | null | undefined;
+    tense: string;
+  },
 ) {
   if (!children) {
     return <>&mdash;</>;
@@ -66,7 +69,18 @@ function Time(
 
   const datetime = children.toString({ timeZoneName: "never" });
   const text = children.toLocaleString();
-  return <relative-time datetime={datetime}>{text}</relative-time>;
+  return (
+    <relative-time
+      datetime={datetime}
+      threshold="PT6H"
+      hour="numeric"
+      minute="2-digit"
+      time-zone-name="shortGeneric"
+      prefix=""
+    >
+      {text}
+    </relative-time>
+  );
 }
 
 export default function createServer(
@@ -92,19 +106,19 @@ export default function createServer(
           <tr>
             <th width="40%">Next occurrence:</th>
             <td>
-              <Time>{scheduler.nextOccurrence}</Time>
+              <Time tense="future">{scheduler.nextOccurrence}</Time>
             </td>
           </tr>
           <tr>
             <th width="40%">Last successful occurrence:</th>
             <td>
-              <Time>{scheduler.lastSuccessfulOccurrence}</Time>
+              <Time tense="past">{scheduler.lastSuccessfulOccurrence}</Time>
             </td>
           </tr>
           <tr>
             <th width="40%">Last failed occurrence:</th>
             <td>
-              <Time>{scheduler.lastFailedOccurrence}</Time>
+              <Time tense="past">{scheduler.lastFailedOccurrence}</Time>
             </td>
           </tr>
         </table>
