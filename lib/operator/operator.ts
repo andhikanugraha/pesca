@@ -3,6 +3,7 @@ import { JsonParseStream } from "@std/json";
 import { type Config } from "../config.ts";
 import { executePull } from "./pull.ts";
 import { executeConsolidation } from "./consolidate.ts";
+import open from "open";
 
 export type Operator = {
   run: (
@@ -93,6 +94,9 @@ async function main() {
     }
     if (commands.includes("consolidate")) {
       await executeConsolidation(config);
+      if (commands.length === 1) {
+        open(config.consolidatedPath);
+      }
     }
     Deno.exit(0);
   } catch (_e) {

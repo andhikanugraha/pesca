@@ -24,6 +24,7 @@ export interface SchedulerParams {
 export interface Config {
   profilePath: string;
   outputPath: string;
+  consolidatedPath: string;
   sources: SourceParams[];
   scheduler: SchedulerParams;
   rulesPath: string;
@@ -123,15 +124,8 @@ function defaultPath(path: string) {
   return resolve(import.meta.dirname || "", "..", path);
 }
 
-export async function resolveConfig({
-  config: unresolvedConfig,
-  task,
-}: {
-  config: Record<string, unknown>;
-  task: Task;
-}): Promise<Config> {
-  const resolvedSources: SourceParams[] = [];
-  const resolvedConfig: Config = {
+function applyDefaults(unresolvedConfig: Record<string, unknown>): Config {
+  return {
     ...unresolvedConfig,
     profilePath: resolve(
       unresolvedConfig.profilePath as string || defaultPath("state/profile"),
@@ -139,10 +133,23 @@ export async function resolveConfig({
     outputPath: resolve(
       unresolvedConfig.outputPath as string || defaultPath("output"),
     ),
-    sources: resolvedSources,
+    consolidatedPath: resolve(
+      unresolvedConfig.outputPath as string || defaultPath("consolidated"),
+    ),
+    sources: [] as SourceParams[],
     scheduler: unresolvedConfig.scheduler || {},
     rulesPath: unresolvedConfig.rulesPath as string || 'pesca.rules',
   };
+}
+
+export async function resolveConfig({
+  config: unresolvedConfig,
+  task,
+}: {
+  config: Record<string, unknown>;
+  task: Task;
+}): Promise<Config> {
+  const resolvedConfig = applyDefaults(unresolvedConfig);
 
   await task.group((task) => [
     task(
@@ -152,6 +159,10 @@ export async function resolveConfig({
     task(
       "Output path: " + resolvedConfig.outputPath,
       () => ensureDir(resolvedConfig.outputPath),
+    ),
+    task(
+      "Consolidated path: " + resolvedConfig.outputPath,
+      () => ensureDir(resolvedConfig.consolidatedPath),
     ),
     task(
       "Resolving source credentials",

@@ -62,16 +62,16 @@ async function processArtifacts(paths: string[]) {
 }
 
 export async function executeConsolidation(config: Config) {
-  const { outputPath, rulesPath } = config;
+  const { outputPath, consolidatedPath, rulesPath } = config;
   const artifacts = await Array.fromAsync(
     expandGlob(`${outputPath}/*/output.json`),
   );
   const paths = artifacts.map((a) => relative(Deno.cwd(), a.path));
   const deduplicatedTransactions = await processArtifacts(paths);
 
-  const outJsonPath = resolve(outputPath, "_consolidated", "consolidated.json");
-  const outCsvPath = resolve(outputPath, "_consolidated", "consolidated.csv");
-  const outXlsxPath = resolve(outputPath, "_consolidated", "consolidated.xlsx");
+  const outJsonPath = resolve(consolidatedPath, "consolidated.json");
+  const outCsvPath = resolve(consolidatedPath, "consolidated.csv");
+  const outXlsxPath = resolve(consolidatedPath, "consolidated.xlsx");
 
   // Consolidated JSON
   await task("Generating consolidated.json", async () => {

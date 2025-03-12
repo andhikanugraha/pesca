@@ -9,6 +9,7 @@
     "cheerio": "npm:cheerio@^1.0.0",
     "get-stream": "npm:get-stream@^9.0.1",
     "hono": "jsr:@hono/hono@^4.7.4",
+    "open": "npm:open@^10.1.0",
     "playwright": "npm:playwright@^1.51.0",
     "tasuku": "npm:tasuku@^2.0.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"

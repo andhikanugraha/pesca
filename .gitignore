@@ -5,6 +5,7 @@ pesca.yml
 pesca.rules
 output
 state
+consolidated
 lab
 lab-*
 
