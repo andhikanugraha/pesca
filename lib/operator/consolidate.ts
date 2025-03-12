@@ -1,9 +1,10 @@
 import { expandGlob } from "@std/fs/expand-glob";
-import { Transaction } from "./transaction.ts";
 import { relative } from "@std/path/relative";
-import { Config } from "../config.ts";
 import { resolve } from "@std/path/resolve";
 import { ensureFile } from "@std/fs";
+
+import { Transaction } from "./transaction.ts";
+import type { Config } from "../config.ts";
 
 function deduplicateTransactions(
   fileTransactionsMap: Map<string, Transaction[]>,

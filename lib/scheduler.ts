@@ -1,6 +1,10 @@
+import { Config, SchedulerParams } from "./config.ts";
+import RepeatingInterval from "./repeating-interval.ts";
+
 export type Scheduler = {
-  start: () => void;
-  run: (customCallback?: ({ signal }: { signal: AbortSignal }) => Promise<boolean>) => Promise<boolean>;
+  run: (
+    customCallback?: ({ signal }: { signal: AbortSignal }) => Promise<boolean>,
+  ) => Promise<boolean>;
   abort: () => void;
   get isRunning(): boolean;
   get durationUntilNext(): Temporal.Duration;
@@ -11,22 +15,29 @@ export type Scheduler = {
 
 export function createScheduler(
   callback: ({ signal }: { signal: AbortSignal }) => Promise<boolean>,
-  {
-    initialOccurrence = Temporal.Now.zonedDateTimeISO(
-      Temporal.Now.timeZoneId(),
-    ),
-    frequency = Temporal.Duration.from("P1D"),
-    retryFrequency = Temporal.Duration.from("PT1H"),
-    timeZone = Temporal.Now.timeZoneId(),
-  }: {
-    initialOccurrence?: Temporal.ZonedDateTime;
-    frequency?: Temporal.Duration;
-    retryFrequency?: Temporal.Duration;
-    timeZone?: string;
-  } = {},
+  config: Config,
 ): Scheduler {
-  let nextOccurrence: Temporal.ZonedDateTime;
-  let intervalId: number | null = null;
+  // Resolve config
+  const defaultFrequency = "P1D";
+  const defaultParams: Required<SchedulerParams> = {
+    schedule: `R/${Temporal.Now.zonedDateTimeISO("UTC")}/${defaultFrequency}`,
+    retryInterval: "PT3H",
+  };
+  const params = Object.assign(defaultParams, config.scheduler);
+
+  const repeatingInterval = RepeatingInterval.from(params.schedule);
+  const retryInterval = Temporal.Duration.from(params.retryInterval);
+  const tz = (repeatingInterval.start || repeatingInterval.end)?.timeZoneId ||
+    Temporal.Now.timeZoneId();
+
+  const initialOccurrence = repeatingInterval.firstAfter(
+    Temporal.Now.zonedDateTimeISO(tz),
+  ) || Temporal.Now.zonedDateTimeISO(tz);
+  const frequency = repeatingInterval.duration ||
+    Temporal.Duration.from(defaultFrequency);
+
+  let nextOccurrence: Temporal.ZonedDateTime = initialOccurrence;
+  const intervalId = setInterval(checkAndRun, 60 * 1000); // 1 minute;
 
   let lastSuccessfulOccurrence: Temporal.ZonedDateTime | null = null;
   let lastFailedOccurrence: Temporal.ZonedDateTime | null = null;
@@ -38,7 +49,7 @@ export function createScheduler(
   async function run(
     customCallback?: ({ signal }: { signal: AbortSignal }) => Promise<boolean>,
   ) {
-    const now = Temporal.Now.zonedDateTimeISO();
+    const now = Temporal.Now.zonedDateTimeISO(tz);
 
     isRunning = true;
 
@@ -60,51 +71,48 @@ export function createScheduler(
       nextOccurrence = now.add(frequency);
     } else {
       lastFailedOccurrence = now;
-      nextOccurrence = now.add(retryFrequency);
+      nextOccurrence = now.add(retryInterval);
     }
 
     return success;
   }
 
   function scheduleNextOccurrence() {
-    const now = Temporal.Now.zonedDateTimeISO();
+    const now = Temporal.Now.zonedDateTimeISO(tz);
 
-    if (typeof nextOccurrence === "undefined") {
-      nextOccurrence = initialOccurrence.toInstant().toZonedDateTimeISO(
-        timeZone,
-      );
-      if (nextOccurrence.until(now).total("seconds") < 0) {
-        nextOccurrence = now.add(frequency);
+    if (Temporal.ZonedDateTime.compare(nextOccurrence, now) <= 0) {
+      const maybeNextOccurrence = repeatingInterval.firstAfter(now);
+      if (maybeNextOccurrence === null) { // No more occurrences based on the specified schedule
+        stop();
+      } else {
+        nextOccurrence = maybeNextOccurrence;
       }
-    } else {
-      run();
     }
   }
 
   async function checkAndRun() {
-    const now = Temporal.Now.zonedDateTimeISO();
+    const now = Temporal.Now.zonedDateTimeISO(tz);
 
     if (now.until(nextOccurrence).total("seconds") <= 0) {
-      await scheduleNextOccurrence();
+      await run();
+      scheduleNextOccurrence();
     }
   }
 
-  function start() {
-    scheduleNextOccurrence();
-    if (!intervalId) {
-      intervalId = setInterval(checkAndRun, 60 * 1000); // 1 minute
+  function stop() {
+    if (intervalId) {
+      clearInterval(intervalId);
     }
   }
 
   function abort() {
     if (abortController) {
       abortController.abort();
-      lastSuccessfulOccurrence = Temporal.Now.zonedDateTimeISO();
+      lastSuccessfulOccurrence = Temporal.Now.zonedDateTimeISO(tz);
     }
   }
 
   return {
-    start,
     run,
     abort,
     get isRunning() {

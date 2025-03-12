@@ -1,7 +1,6 @@
-import task from "tasuku";
 import { JsonParseStream } from "@std/json";
 
-import { type Config, resolveConfig } from "../config.ts";
+import { type Config } from "../config.ts";
 import { executePull } from "./pull.ts";
 import { executeConsolidation } from "./consolidate.ts";
 
@@ -55,17 +54,7 @@ async function spawnSelf(payload: Payload, signal: AbortSignal) {
   return child;
 }
 
-export async function createOperator(
-  unresolvedConfig: Record<string, unknown>,
-): Promise<Operator> {
-  const configTask = await task(
-    "Resolving configuration",
-    ({ task }): Promise<Config> =>
-      resolveConfig({ config: unresolvedConfig, task }),
-  );
-
-  const config = configTask.result;
-
+export function createOperator(config: Config): Operator {
   async function run(
     { commands = ["pull", "consolidate"], signal }: {
       commands?: Command[];

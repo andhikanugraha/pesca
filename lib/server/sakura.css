@@ -6,7 +6,15 @@
 /* Body */
 html {
   font-size: 62.5%;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    sans-serif;
 }
 
 body {
@@ -31,7 +39,15 @@ body {
 }
 h1, h2, h3, h4, h5, h6 {
   line-height: 1.1;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    sans-serif;
   font-weight: 700;
   margin-top: 3rem;
   margin-bottom: 1.5rem;
@@ -150,15 +166,20 @@ pre > code {
 
 /* Tables */
 table {
-  text-align: justify;
+  text-align: left;
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 2rem;
+  border-top: 1px solid #f7f7f7;
 }
 
 td, th {
   padding: 0.5em;
   border-bottom: 1px solid #f7f7f7;
+}
+
+th {
+  font-weight: 600;
 }
 
 /* Buttons, forms and input */
@@ -173,10 +194,15 @@ textarea {
   width: 100%;
 }
 
-.button, button, input[type=submit], input[type=reset], input[type=button], input[type=file]::file-selector-button {
+.button,
+button,
+input[type="submit"],
+input[type="reset"],
+input[type="button"],
+input[type="file"]::file-selector-button {
   display: inline-block;
   padding: 5px 20px;
-  margin-right: 10px;
+  margin: 0 0.5em 5px 0;
   text-align: center;
   text-decoration: none;
   white-space: nowrap;
@@ -186,25 +212,42 @@ textarea {
   border: 1px solid #007559;
   cursor: pointer;
   box-sizing: border-box;
-  font-size: 1.2em;
+  font: inherit;
+  border-radius: 5px;
 }
-.button[disabled], button[disabled], input[type=submit][disabled], input[type=reset][disabled], input[type=button][disabled], input[type=file]::file-selector-button[disabled] {
+.button[disabled],
+button[disabled],
+input[type="submit"][disabled],
+input[type="reset"][disabled],
+input[type="button"][disabled],
+input[type="file"]::file-selector-button[disabled] {
   cursor: default;
   opacity: 0.5;
 }
-.button:hover, button:hover, input[type=submit]:hover, input[type=reset]:hover, input[type=button]:hover, input[type=file]::file-selector-button:hover {
+.button:hover,
+button:hover,
+input[type="submit"]:hover,
+input[type="reset"]:hover,
+input[type="button"]:hover,
+input[type="file"]::file-selector-button:hover {
   background-color: #006994;
   color: #ffffff;
   outline: 0;
 }
-.button:focus-visible, button:focus-visible, input[type=submit]:focus-visible, input[type=reset]:focus-visible, input[type=button]:focus-visible, input[type=file]::file-selector-button:focus-visible {
+.button:focus-visible,
+button:focus-visible,
+input[type="submit"]:focus-visible,
+input[type="reset"]:focus-visible,
+input[type="button"]:focus-visible,
+input[type="file"]::file-selector-button:focus-visible {
   outline-style: solid;
   outline-width: 2px;
 }
 
 textarea, select, input {
   color: #222222;
-  padding: 6px 10px; /* The 6px vertically centers text on FF, ignored by Webkit */
+  /* The 6px vertically centers text on FF, ignored by Webkit */
+  padding: 6px 10px;
   margin-bottom: 10px;
   background-color: #f7f7f7;
   border: 1px solid #f7f7f7;
@@ -217,7 +260,7 @@ textarea:focus, select:focus, input:focus {
   outline: 0;
 }
 
-input[type=checkbox]:focus {
+input[type="checkbox"]:focus {
   outline: 1px dotted #007559;
 }
 
@@ -225,4 +268,9 @@ label, legend, fieldset {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
+}
+
+progress {
+  display: block;
+  width: 100%;
 }

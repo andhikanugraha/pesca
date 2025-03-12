@@ -16,10 +16,16 @@ export interface UnresolvedSourceParams extends Partial<SourceParams> {
   key?: string;
 }
 
+export interface SchedulerParams {
+  schedule?: string;
+  retryInterval?: string;
+}
+
 export interface Config {
   profilePath: string;
   outputPath: string;
   sources: SourceParams[];
+  scheduler: SchedulerParams;
 }
 
 async function init1Password() {
@@ -133,6 +139,7 @@ export async function resolveConfig({
       config.outputPath as string || defaultPath("output"),
     ),
     sources: resolvedSources,
+    scheduler: config.scheduler || {},
   };
 
   await task.group((task) => [

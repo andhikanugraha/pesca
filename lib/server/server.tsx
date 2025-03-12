@@ -19,6 +19,13 @@ function Layout({ children }: { children: ReactNode }) {
     <>
       <title>pesca</title>
       <link rel="stylesheet" href="/sakura.css" />
+      <script src="/relative-time-element.js" type="module" />
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            `function showLoadingIndicator() { document.querySelector("progress").style.display = "block" }`,
+        }}
+      />
       <h1>pesca</h1>
       {children}
     </>
@@ -28,7 +35,7 @@ function Layout({ children }: { children: ReactNode }) {
 function Commands() {
   return (
     <>
-      <form action="/run" method="post">
+      <form action="/run" method="post" onsubmit="showLoadingIndicator()">
         <p>
           <button type="submit" name="task" value="run">Run</button>
           &nbsp;
@@ -44,19 +51,22 @@ function Commands() {
             Abort
           </button>
         </p>
+        <progress style="display: none"></progress>
       </form>
     </>
   );
 }
 
-function Time({ children }: { children?: Temporal.ZonedDateTime }) {
+function Time(
+  { children }: { children: Temporal.ZonedDateTime | null | undefined },
+) {
   if (!children) {
-    return <time />;
+    return <>&mdash;</>;
   }
 
   const datetime = children.toString({ timeZoneName: "never" });
   const text = children.toLocaleString();
-  return <time datetime={datetime}>{text}</time>;
+  return <relative-time datetime={datetime}>{text}</relative-time>;
 }
 
 export default function createServer(
@@ -65,6 +75,7 @@ export default function createServer(
   const app = new Hono();
 
   app.get("/sakura.css", serveFile("sakura.css"));
+  app.get("/relative-time-element.js", serveFile("relative-time-element.js"));
   app.use(async (c, next) => {
     c.setRenderer((content) =>
       c.html(
@@ -77,22 +88,27 @@ export default function createServer(
   app.get("/", (c) =>
     c.render(
       <>
-        <p>
-          Next: <Time>{scheduler.nextOccurrence}</Time>
-        </p>
-        {scheduler.lastSuccessfulOccurrence && (
-          <p>
-            Last successful occurrence:{" "}
-            <Time>{scheduler.lastSuccessfulOccurrence}</Time>
-          </p>
-        )}
-        {scheduler.lastFailedOccurrence && (
-          <p>
-            Last successful occurrence:{" "}
-            <Time>{scheduler.lastFailedOccurrence}</Time>
-          </p>
-        )}
-        <Commands />,
+        <table>
+          <tr>
+            <th width="40%">Next occurrence:</th>
+            <td>
+              <Time>{scheduler.nextOccurrence}</Time>
+            </td>
+          </tr>
+          <tr>
+            <th width="40%">Last successful occurrence:</th>
+            <td>
+              <Time>{scheduler.lastSuccessfulOccurrence}</Time>
+            </td>
+          </tr>
+          <tr>
+            <th width="40%">Last failed occurrence:</th>
+            <td>
+              <Time>{scheduler.lastFailedOccurrence}</Time>
+            </td>
+          </tr>
+        </table>
+        <Commands />
       </>,
     ));
 
