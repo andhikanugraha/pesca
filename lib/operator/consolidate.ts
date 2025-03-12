@@ -2,9 +2,11 @@ import { expandGlob } from "@std/fs/expand-glob";
 import { relative } from "@std/path/relative";
 import { resolve } from "@std/path/resolve";
 import { ensureFile } from "@std/fs";
+import task from "tasuku";
 
 import { Transaction } from "./transaction.ts";
 import type { Config } from "../config.ts";
+import { generateWorkbook } from "./workbook.ts";
 
 function deduplicateTransactions(
   fileTransactionsMap: Map<string, Transaction[]>,
@@ -67,22 +69,41 @@ export async function executeConsolidation(config: Config) {
   const paths = artifacts.map((a) => relative(Deno.cwd(), a.path));
   const deduplicatedTransactions = await processArtifacts(paths);
 
-  // Consolidated CSV
-  const outCsvPath = resolve(outputPath, "_consolidated", "consolidated.csv");
   const outJsonPath = resolve(outputPath, "_consolidated", "consolidated.json");
-  await ensureFile(outCsvPath);
-  using outCsv = await Deno.open(outCsvPath, { write: true });
-  await Transaction.toCsvStream(deduplicatedTransactions)
-    .pipeThrough(new TextEncoderStream())
-    .pipeTo(outCsv.writable);
+  const outCsvPath = resolve(outputPath, "_consolidated", "consolidated.csv");
+  const outXlsxPath = resolve(outputPath, "_consolidated", "consolidated.xlsx");
 
   // Consolidated JSON
-  await ensureFile(outJsonPath);
-  await Deno.writeTextFile(
-    outJsonPath,
-    JSON.stringify({
-      updatedAt: Temporal.Now.zonedDateTimeISO().toString({ timeZoneName: "never" }),
-      transactions: deduplicatedTransactions,
-    }, null, 2),
-  );
+  task("Generating consolidated.json", async () => {
+    await ensureFile(outJsonPath);
+    await Deno.writeTextFile(
+      outJsonPath,
+      JSON.stringify(
+        {
+          updatedAt: Temporal.Now.zonedDateTimeISO().toString({
+            timeZoneName: "never",
+          }),
+          transactions: deduplicatedTransactions,
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+  // Consolidated CSV
+  task("Generating consolidated.csv", async () => {
+    await ensureFile(outCsvPath);
+    using outCsv = await Deno.open(outCsvPath, { write: true });
+    await Transaction.toCsvStream(deduplicatedTransactions)
+      .pipeThrough(new TextEncoderStream())
+      .pipeTo(outCsv.writable);
+  });
+
+  // Consolidated XLSX
+  task("Generating consolidated.xlsx", async () => {
+    await ensureFile(outXlsxPath);
+    const xlsxU8 = generateWorkbook(deduplicatedTransactions);
+    await Deno.writeFile(outXlsxPath, xlsxU8);
+  });
 }

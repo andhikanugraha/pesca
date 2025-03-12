@@ -27,6 +27,7 @@ const childFlags = [
   "--allow-sys",
   "--allow-env",
   "--allow-run",
+  "--allow-import=cdn.sheetjs.com,jsr.io",
   "--unstable-temporal",
 ];
 
@@ -41,11 +42,12 @@ async function spawnSelf(payload: Payload, signal: AbortSignal) {
   });
   const child = command.spawn();
 
-  let killed = false;
   signal.onabort = () => {
-    if (!killed) {
+    try {
       child.kill();
-      killed = true;
+      return true;
+    } catch (_e) {
+      return false;
     }
   };
 

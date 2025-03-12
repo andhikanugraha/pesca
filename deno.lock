@@ -240,6 +240,9 @@
       ]
     }
   },
+  "remote": {
+    "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs": "1a0fb062ee9781b13f6687371b202aaefc53b6ce55b530c027e01f9c087b77db"
+  },
   "workspace": {
     "dependencies": [
       "jsr:@hono/hono@^4.7.4",

@@ -10,11 +10,12 @@
     "get-stream": "npm:get-stream@^9.0.1",
     "hono": "jsr:@hono/hono@^4.7.4",
     "playwright": "npm:playwright@^1.51.0",
-    "tasuku": "npm:tasuku@^2.0.1"
+    "tasuku": "npm:tasuku@^2.0.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
   },
   "tasks": {
     "init-actual": "cd lib/actual && npm i",
-    "start": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --allow-net --unstable-temporal index.ts"
+    "start": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --allow-net --allow-import=\"cdn.sheetjs.com:443,jsr.io:443\" --unstable-temporal index.ts"
   },
   "compilerOptions": {
     "jsx": "precompile",
