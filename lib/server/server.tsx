@@ -3,7 +3,7 @@ import { serveStatic } from "hono/deno";
 import { relative, resolve } from "@std/path";
 import { type ReactNode } from "hono/jsx";
 
-import { type Scheduler } from "../scheduler.ts";
+import { type Scheduler } from "../scheduler/scheduler.ts";
 import { type Operator } from "../operator/operator.ts";
 
 function serveFile(path: string) {

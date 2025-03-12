@@ -1,4 +1,4 @@
-import { Config, SchedulerParams } from "./config.ts";
+import { Config, SchedulerParams } from "../config.ts";
 import RepeatingInterval from "./repeating-interval.ts";
 
 export type Scheduler = {

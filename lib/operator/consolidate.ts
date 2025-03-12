@@ -6,7 +6,7 @@ import task from "tasuku";
 
 import { Transaction } from "./transaction.ts";
 import type { Config } from "../config.ts";
-import { generateWorkbook } from "./workbook.ts";
+import { generateWorkbook } from "./consolidate/workbook.ts";
 
 function deduplicateTransactions(
   fileTransactionsMap: Map<string, Transaction[]>,
@@ -62,7 +62,7 @@ async function processArtifacts(paths: string[]) {
 }
 
 export async function executeConsolidation(config: Config) {
-  const { outputPath } = config;
+  const { outputPath, rulesPath } = config;
   const artifacts = await Array.fromAsync(
     expandGlob(`${outputPath}/*/output.json`),
   );
@@ -103,7 +103,8 @@ export async function executeConsolidation(config: Config) {
   // Consolidated XLSX
   await task("Generating consolidated.xlsx", async () => {
     await ensureFile(outXlsxPath);
-    const xlsxU8 = generateWorkbook(deduplicatedTransactions);
+    const rules = await Deno.readTextFile(rulesPath);
+    const xlsxU8 = generateWorkbook(deduplicatedTransactions, rules);
     await Deno.writeFile(outXlsxPath, xlsxU8);
   });
 }

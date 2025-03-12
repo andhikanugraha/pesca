@@ -3,7 +3,7 @@ import { parse } from "@std/yaml";
 import { createOperator } from "./lib/operator/operator.ts";
 import createServer from "./lib/server/server.tsx";
 import task from "tasuku";
-import { createScheduler } from "./lib/scheduler.ts";
+import { createScheduler } from "./lib/scheduler/scheduler.ts";
 import { type Config, resolveConfig } from "./lib/config.ts";
 
 async function main(pathToConfigYaml = "pesca.yml") {

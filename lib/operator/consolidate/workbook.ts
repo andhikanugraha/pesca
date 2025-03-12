@@ -1,10 +1,11 @@
-import { Transaction } from "./transaction.ts";
+// @ts-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
+import * as XLSX from "xlsx";
+
+import type { Transaction } from "../transaction.ts";
+import getRuleMapper from "./rules.ts";
 
 type TransactionRow = [string, Date, string, number, string];
 type TransactionToCategoryMapper = (t: Transaction) => string;
-
-// @ts-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
-import * as XLSX from "xlsx";
 
 // iterate across months
 function getMonthIndex(transaction: Transaction) {
@@ -16,21 +17,23 @@ function toDate(plain: Temporal.PlainDate): Date {
   return new Date(zoned.epochMilliseconds);
 }
 
-function toRow(t: Transaction): TransactionRow {
+function toRow(
+  t: Transaction,
+  map: TransactionToCategoryMapper,
+): TransactionRow {
   return [
     t.account,
     toDate(t.date),
     t.description,
     t.amount,
-    "",
+    map(t),
   ];
 }
 
-export function generateWorkbook(
+function groupByMonth(
   transactions: Transaction[],
-) {
-  const workbook = XLSX.utils.book_new();
-
+  mapper: TransactionToCategoryMapper,
+): Map<string, TransactionRow[]> {
   const months = new Map<string, TransactionRow[]>();
   for (const transaction of transactions) {
     const monthIndex = getMonthIndex(transaction);
@@ -41,10 +44,28 @@ export function generateWorkbook(
 
     const month = months.get(monthIndex);
     if (month) {
-      month.push(toRow(transaction));
+      month.push(toRow(transaction, mapper));
     }
   }
 
+  return months;
+}
+
+function applyWidths(ws: XLSX.WorkSheet, ...widths: number[]): XLSX.WorkSheet {
+  ws["!cols"] = [];
+  const cols = ws["!cols"];
+  widths.forEach((wch, i) => {
+    cols[i] = { wch };
+  });
+  return ws;
+}
+
+export function generateWorkbook(transactions: Transaction[], rules: string) {
+  const workbook = XLSX.utils.book_new();
+
+  const mapper = getRuleMapper(rules);
+
+  const months = groupByMonth(transactions, mapper);
   const sortedMonthIndices = [...months.keys()].sort();
 
   for (const month of sortedMonthIndices) {
@@ -58,9 +79,12 @@ export function generateWorkbook(
         cellDates: true,
         dateNF: "yyyy-mm-dd",
       });
+
+      applyWidths(worksheet, 20, 10, 65, 10, 20);
+
       XLSX.utils.book_append_sheet(workbook, worksheet, month);
     }
   }
 
-  return XLSX.writeXLSX(workbook, { type: "buffer" });
+  return XLSX.writeXLSX(workbook, { type: "buffer", cellStyles: true });
 }

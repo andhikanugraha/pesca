@@ -26,6 +26,7 @@ export interface Config {
   outputPath: string;
   sources: SourceParams[];
   scheduler: SchedulerParams;
+  rulesPath: string;
 }
 
 async function init1Password() {
@@ -123,7 +124,7 @@ function defaultPath(path: string) {
 }
 
 export async function resolveConfig({
-  config,
+  config: unresolvedConfig,
   task,
 }: {
   config: Record<string, unknown>;
@@ -131,15 +132,16 @@ export async function resolveConfig({
 }): Promise<Config> {
   const resolvedSources: SourceParams[] = [];
   const resolvedConfig: Config = {
-    ...config,
+    ...unresolvedConfig,
     profilePath: resolve(
-      config.profilePath as string || defaultPath("state/profile"),
+      unresolvedConfig.profilePath as string || defaultPath("state/profile"),
     ),
     outputPath: resolve(
-      config.outputPath as string || defaultPath("output"),
+      unresolvedConfig.outputPath as string || defaultPath("output"),
     ),
     sources: resolvedSources,
-    scheduler: config.scheduler || {},
+    scheduler: unresolvedConfig.scheduler || {},
+    rulesPath: unresolvedConfig.rulesPath as string || 'pesca.rules',
   };
 
   await task.group((task) => [
@@ -153,7 +155,7 @@ export async function resolveConfig({
     ),
     task(
       "Resolving source credentials",
-      ({ task }) => resolveSources({ task, config, resolvedConfig }),
+      ({ task }) => resolveSources({ task, config: unresolvedConfig, resolvedConfig }),
     ),
   ], { concurrency: 3 });
 
