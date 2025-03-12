@@ -1,7 +1,7 @@
 .DS_Store
 
 # Pesca
-pesca.toml
+pesca.yml
 output
 state
 lab

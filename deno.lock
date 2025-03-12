@@ -2,14 +2,15 @@
   "version": "4",
   "specifiers": {
     "jsr:@hono/hono@^4.7.4": "4.7.4",
-    "jsr:@std/collections@^1.0.9": "1.0.10",
+    "jsr:@std/bytes@^1.0.5": "1.0.5",
     "jsr:@std/csv@^1.0.5": "1.0.5",
     "jsr:@std/fs@^1.0.14": "1.0.14",
     "jsr:@std/json@^1.0.1": "1.0.1",
     "jsr:@std/path@^1.0.8": "1.0.8",
     "jsr:@std/streams@^1.0.7": "1.0.9",
     "jsr:@std/streams@^1.0.8": "1.0.9",
-    "jsr:@std/toml@^1.0.2": "1.0.2",
+    "jsr:@std/streams@^1.0.9": "1.0.9",
+    "jsr:@std/yaml@^1.0.5": "1.0.5",
     "npm:@types/node@*": "22.12.0",
     "npm:cheerio@1": "1.0.0",
     "npm:get-stream@^9.0.1": "9.0.1",
@@ -20,8 +21,8 @@
     "@hono/hono@4.7.4": {
       "integrity": "c03c9cbe0fbfc4e51f3fee6502a7903aa4f9ef7c2c98635607b15eee14258825"
     },
-    "@std/collections@1.0.10": {
-      "integrity": "903af106a3d92970d74e20f7ebff77d9658af9bef4403f1dc42a7801c0575899"
+    "@std/bytes@1.0.5": {
+      "integrity": "4465dd739d7963d964c809202ebea6d5c6b8e3829ef25c6a224290fbb8a1021e"
     },
     "@std/csv@1.0.5": {
       "integrity": "02006ffd77e84b2bf01968d4e792f0b5cba057c73dc6a89accb96d803493675f",
@@ -45,13 +46,13 @@
       "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
     },
     "@std/streams@1.0.9": {
-      "integrity": "a9d26b1988cdd7aa7b1f4b51e1c36c1557f3f252880fa6cc5b9f37078b1a5035"
-    },
-    "@std/toml@1.0.2": {
-      "integrity": "5892ba489c5b512265a384238a8fe8dddbbb9498b4b210ef1b9f0336a423a39b",
+      "integrity": "a9d26b1988cdd7aa7b1f4b51e1c36c1557f3f252880fa6cc5b9f37078b1a5035",
       "dependencies": [
-        "jsr:@std/collections"
+        "jsr:@std/bytes"
       ]
+    },
+    "@std/yaml@1.0.5": {
+      "integrity": "71ba3d334305ee2149391931508b2c293a8490f94a337eef3a09cade1a2a2742"
     }
   },
   "npm": {
@@ -247,7 +248,7 @@
       "jsr:@std/json@^1.0.1",
       "jsr:@std/path@^1.0.8",
       "jsr:@std/streams@^1.0.9",
-      "jsr:@std/toml@^1.0.2",
+      "jsr:@std/yaml@^1.0.5",
       "npm:cheerio@1",
       "npm:get-stream@^9.0.1",
       "npm:playwright@^1.51.0",

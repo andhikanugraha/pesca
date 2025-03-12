@@ -5,7 +5,7 @@
     "@std/json": "jsr:@std/json@^1.0.1",
     "@std/path": "jsr:@std/path@^1.0.8",
     "@std/streams": "jsr:@std/streams@^1.0.9",
-    "@std/toml": "jsr:@std/toml@^1.0.2",
+    "@std/yaml": "jsr:@std/yaml@^1.0.5",
     "cheerio": "npm:cheerio@^1.0.0",
     "get-stream": "npm:get-stream@^9.0.1",
     "hono": "jsr:@hono/hono@^4.7.4",
