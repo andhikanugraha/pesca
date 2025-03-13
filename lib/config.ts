@@ -158,7 +158,7 @@ export async function resolveConfig({
       () => ensureDir(resolvedConfig.outputPath),
     ),
     task(
-      "Consolidated path: " + resolvedConfig.outputPath,
+      "Consolidated path: " + resolvedConfig.consolidatedPath,
       () => ensureDir(resolvedConfig.consolidatedPath),
     ),
     task(
