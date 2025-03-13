@@ -21,7 +21,7 @@ export function createScheduler(
   const defaultFrequency = "P1D";
   const defaultParams: Required<SchedulerParams> = {
     schedule: `R/${Temporal.Now.zonedDateTimeISO("UTC")}/${defaultFrequency}`,
-    retryInterval: "PT3H",
+    retryInterval: "PT30M",
   };
   const params = Object.assign(defaultParams, config.scheduler);
 
@@ -33,8 +33,6 @@ export function createScheduler(
   const initialOccurrence = repeatingInterval.firstAfter(
     Temporal.Now.zonedDateTimeISO(tz),
   ) || Temporal.Now.zonedDateTimeISO(tz);
-  const frequency = repeatingInterval.duration ||
-    Temporal.Duration.from(defaultFrequency);
 
   let nextOccurrence: Temporal.ZonedDateTime = initialOccurrence;
   const intervalId = setInterval(checkAndRun, 60 * 1000); // 1 minute;
@@ -68,24 +66,36 @@ export function createScheduler(
 
     if (success) {
       lastSuccessfulOccurrence = now;
-      nextOccurrence = now.add(frequency);
+      const maybeNextOccurrence = repeatingInterval.firstAfter(now);
+      if (maybeNextOccurrence === null) { // No more occurrences based on the specified schedule
+        stop();
+      } else {
+        nextOccurrence = maybeNextOccurrence;
+      }
     } else {
       lastFailedOccurrence = now;
       nextOccurrence = now.add(retryInterval);
     }
 
     return success;
+    // if called directly (not from the timer), don't adjust the next recurrence
   }
 
-  function scheduleNextOccurrence() {
+  function scheduleNextOccurrence(success: boolean) {
     const now = Temporal.Now.zonedDateTimeISO(tz);
 
     if (Temporal.ZonedDateTime.compare(nextOccurrence, now) <= 0) {
-      const maybeNextOccurrence = repeatingInterval.firstAfter(now);
-      if (maybeNextOccurrence === null) { // No more occurrences based on the specified schedule
-        stop();
+      if (success) {
+        lastSuccessfulOccurrence = now;
+        const maybeNextOccurrence = repeatingInterval.firstAfter(now);
+        if (maybeNextOccurrence === null) { // No more occurrences based on the specified schedule
+          stop();
+        } else {
+          nextOccurrence = maybeNextOccurrence;
+        }
       } else {
-        nextOccurrence = maybeNextOccurrence;
+        lastFailedOccurrence = now;
+        nextOccurrence = now.add(retryInterval);
       }
     }
   }
@@ -94,15 +104,13 @@ export function createScheduler(
     const now = Temporal.Now.zonedDateTimeISO(tz);
 
     if (now.until(nextOccurrence).total("seconds") <= 0) {
-      await run();
-      scheduleNextOccurrence();
+      const success = await run();
+      scheduleNextOccurrence(success);
     }
   }
 
   function stop() {
-    if (intervalId) {
-      clearInterval(intervalId);
-    }
+    clearInterval(intervalId);
   }
 
   function abort() {
