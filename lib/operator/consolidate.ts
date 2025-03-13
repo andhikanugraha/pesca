@@ -7,44 +7,7 @@ import task from "tasuku";
 import { Transaction } from "./transaction.ts";
 import type { Config } from "../config.ts";
 import { generateWorkbook } from "./consolidate/workbook.ts";
-
-function deduplicateTransactions(
-  fileTransactionsMap: Map<string, Transaction[]>,
-): Transaction[] {
-  // Key: transactionKey, Value: Set of filePaths where seen
-  const uniqueTransactions = new Map<string, Set<string>>();
-  const deduplicatedTransactions: Transaction[] = [];
-
-  for (const [filePath, transactions] of fileTransactionsMap.entries()) {
-    for (const transaction of transactions.filter((t) => !t.isPending)) {
-      const { date, description, account } = transaction;
-
-      const transactionKey =
-        `${account}\x1F${date.toString()}\x1F${description}}`;
-
-      const seenFilePaths = uniqueTransactions.get(transactionKey);
-      if (!seenFilePaths) {
-        // First time seeing this transaction key, initialize file path set
-        uniqueTransactions.set(transactionKey, new Set([filePath]));
-        deduplicatedTransactions.push(transaction);
-      } else {
-        // Transaction key already exists
-        if (!seenFilePaths.has(filePath)) {
-          seenFilePaths.add(filePath); // Add current file path to the set
-          // Don't add this transaction because it was already added from a different file
-        } else {
-          // Transaction with this key already seen in the *same* file path
-          // We don't need to deduplicate
-          deduplicatedTransactions.push(transaction);
-        }
-      }
-    }
-  }
-
-  return deduplicatedTransactions.sort((a, b) =>
-    Temporal.PlainDate.compare(a.date, b.date)
-  ); // Sort by date
-}
+import { deduplicateTransactions } from "./consolidate/deduplicate.ts";
 
 function parseArtifact(artifactText: string): Transaction[] {
   const { transactions } = JSON.parse(artifactText, Transaction.reviver);
