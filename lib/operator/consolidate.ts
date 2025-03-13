@@ -1,12 +1,12 @@
 import { expandGlob } from "@std/fs/expand-glob";
 import { relative } from "@std/path/relative";
 import { resolve } from "@std/path/resolve";
-import { ensureFile } from "@std/fs";
+import { ensureDir, ensureFile } from "@std/fs";
 import task from "tasuku";
 
 import { Transaction } from "./transaction.ts";
 import type { Config } from "../config.ts";
-import { generateWorkbook } from "./consolidate/workbook.ts";
+import { writeWorkbooksByYear } from "./consolidate/workbook.ts";
 import { deduplicateTransactions } from "./consolidate/deduplicate.ts";
 
 function parseArtifact(artifactText: string): Transaction[] {
@@ -34,7 +34,7 @@ export async function executeConsolidation(config: Config) {
 
   const outJsonPath = resolve(consolidatedPath, "consolidated.json");
   const outCsvPath = resolve(consolidatedPath, "consolidated.csv");
-  const outXlsxPath = resolve(consolidatedPath, "consolidated.xlsx");
+  const outXlsxPathBase = resolve(consolidatedPath, "xlsx");
 
   // Consolidated JSON
   await task("Generating consolidated.json", async () => {
@@ -65,9 +65,12 @@ export async function executeConsolidation(config: Config) {
 
   // Consolidated XLSX
   await task("Generating consolidated.xlsx", async () => {
-    await ensureFile(outXlsxPath);
+    await ensureDir(outXlsxPathBase);
     const rules = await Deno.readTextFile(rulesPath);
-    const xlsxU8 = generateWorkbook(deduplicatedTransactions, rules);
-    await Deno.writeFile(outXlsxPath, xlsxU8);
+    await writeWorkbooksByYear(
+      deduplicatedTransactions,
+      rules,
+      outXlsxPathBase,
+    );
   });
 }

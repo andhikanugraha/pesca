@@ -3,88 +3,133 @@ import * as XLSX from "xlsx";
 
 import type { Transaction } from "../transaction.ts";
 import getRuleMapper from "./rules.ts";
+import { getOrSet } from "./map.ts";
+import { ensureFile, expandGlob } from "@std/fs";
+import { resolve } from "@std/path/resolve";
 
-type TransactionRow = [string, Date, string, number, string];
-type TransactionToCategoryMapper = (t: Transaction) => string;
-
-// iterate across months
-function getMonthIndex(transaction: Transaction) {
-  return Temporal.PlainYearMonth.from(transaction.date).toString();
-}
+type Row = [string, Date, string, number, string, string];
+type Mapper = (t: Transaction) => string;
 
 function toDate(plain: Temporal.PlainDate): Date {
   const zoned = plain.toZonedDateTime(Temporal.Now.timeZoneId());
   return new Date(zoned.epochMilliseconds);
 }
 
-function toRow(
-  t: Transaction,
-  map: TransactionToCategoryMapper,
-): TransactionRow {
+type Year = string;
+function rowsByYear(
+  transactions: Transaction[],
+  mapper: Mapper,
+  overrideMap: Mapper,
+): Map<Year, Row[]> {
+  const map = new Map<Year, Row[]>();
+  for (const transaction of transactions) {
+    const key = transaction.date.year.toString();
+    const year = getOrSet(map, key, []);
+    year.push(toRow(transaction, mapper, overrideMap));
+  }
+
+  return map;
+}
+
+function applyWidths(
+  sheet: XLSX.WorkSheet,
+  ...widths: (number | null)[]
+): XLSX.WorkSheet {
+  sheet["!cols"] = [];
+  const cols = sheet["!cols"];
+  widths.forEach((wch, i) => {
+    if (wch !== null) {
+      cols[i] = { wch };
+    } else {
+      cols[i] = { hidden: true };
+    }
+  });
+  return sheet;
+}
+
+async function loadOverrideMapper(
+  baseDir: string,
+): Promise<[Mapper, Map<string, string>]> {
+  const map = new Map<string, string>();
+  for await (const file of expandGlob(`${baseDir}/*.xlsx`)) {
+    const { path } = file;
+    const u8 = await Deno.readFile(path);
+    const workbook = XLSX.read(u8);
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(worksheet) as Record<
+      string,
+      string | number
+    >[];
+    for (const row of rows) {
+      const { Description, Category, AutoCategory } = row as Record<
+        string,
+        string
+      >;
+      if (Category.trim() && Category !== AutoCategory) {
+        map.set(Description, Category.trim());
+      }
+    }
+  }
+
+  return [
+    (t: Transaction) => map.get(t.description) || "",
+    map,
+  ];
+}
+
+function generateWorkbook(
+  transactionRows: Iterable<Row>,
+  overrideRows: Iterable<[string, string]>,
+): Uint8Array {
+  const workbook = XLSX.utils.book_new();
+
+  const sheet1 = XLSX.utils.aoa_to_sheet([
+    ["Account", "Date", "Description", "Amount", "Category", "AutoCategory"],
+    ...transactionRows,
+  ], {
+    cellDates: true,
+    dateNF: "yyyy-mm-dd",
+  });
+  applyWidths(sheet1, 20, 10, 65, 10, 20, null);
+  XLSX.utils.book_append_sheet(workbook, sheet1, "Transactions");
+
+  const sheet2 = XLSX.utils.aoa_to_sheet([
+    ["Description", "Category"],
+    ...overrideRows,
+  ]);
+  applyWidths(sheet2, 65, 20);
+  XLSX.utils.book_append_sheet(workbook, sheet2, "Categories");
+
+  return XLSX.writeXLSX(workbook, { type: "buffer", cellStyles: true });
+}
+
+function toRow(t: Transaction, map: Mapper, overrideMap: Mapper): Row {
   return [
     t.account,
     toDate(t.date),
     t.description,
     t.amount,
+    overrideMap(t) || map(t),
     map(t),
   ];
 }
-
-function groupByMonth(
+export async function writeWorkbooksByYear(
   transactions: Transaction[],
-  mapper: TransactionToCategoryMapper,
-): Map<string, TransactionRow[]> {
-  const months = new Map<string, TransactionRow[]>();
-  for (const transaction of transactions) {
-    const monthIndex = getMonthIndex(transaction);
+  rules: string,
+  baseDir: string,
+): Promise<void> {
+  const defaultMapper = getRuleMapper(rules);
+  const [overrideMapper, overrideMap] = await loadOverrideMapper(baseDir);
+  const transactionsByYear = rowsByYear(
+    transactions,
+    defaultMapper,
+    overrideMapper,
+  );
 
-    if (!months.get(monthIndex)) {
-      months.set(monthIndex, []);
-    }
-
-    const month = months.get(monthIndex);
-    if (month) {
-      month.push(toRow(transaction, mapper));
-    }
+  for (const [year, transactionRows] of transactionsByYear) {
+    const workbook = generateWorkbook(transactionRows, overrideMap);
+    const path = resolve(baseDir, `${year}.xlsx`);
+    await ensureFile(path);
+    await Deno.writeFile(path, workbook);
   }
-
-  return months;
-}
-
-function applyWidths(ws: XLSX.WorkSheet, ...widths: number[]): XLSX.WorkSheet {
-  ws["!cols"] = [];
-  const cols = ws["!cols"];
-  widths.forEach((wch, i) => {
-    cols[i] = { wch };
-  });
-  return ws;
-}
-
-export function generateWorkbook(transactions: Transaction[], rules: string) {
-  const workbook = XLSX.utils.book_new();
-
-  const mapper = getRuleMapper(rules);
-
-  const months = groupByMonth(transactions, mapper);
-  const sortedMonthIndices = [...months.keys()].sort();
-
-  for (const month of sortedMonthIndices) {
-    const list = months.get(month);
-    if (list) {
-      const rows = [
-        ["Account", "Date", "Description", "Amount", "Category"],
-        ...list,
-      ];
-      const worksheet = XLSX.utils.aoa_to_sheet(rows, {
-        cellDates: true,
-        dateNF: "yyyy-mm-dd",
-      });
-
-      applyWidths(worksheet, 20, 10, 65, 10, 20);
-
-      XLSX.utils.book_append_sheet(workbook, worksheet, month);
-    }
-  }
-
-  return XLSX.writeXLSX(workbook, { type: "buffer", cellStyles: true });
 }

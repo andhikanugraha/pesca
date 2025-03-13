@@ -1,4 +1,5 @@
 import { Transaction } from "../transaction.ts";
+import { getOrSet } from "./map.ts";
 
 // type aliases to improve readability
 type FPath = string;
@@ -7,13 +8,6 @@ type TKey = string;
 function getTransactionKey(t: Transaction): TKey {
   const { date, description, account, amount } = t;
   return `${account}\x1F${date.toString()}\x1F${description}\x1F${amount}`;
-}
-
-function getOrSet<K, T>(map: Map<K, T>, key: K, value: T): T {
-  if (map.has(key)) return map.get(key) as T;
-
-  map.set(key, value);
-  return value;
 }
 
 export function deduplicateTransactions(

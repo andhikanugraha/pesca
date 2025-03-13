@@ -120,25 +120,22 @@ async function resolveSources(
     ), { concurrency: 10 });
 }
 
-function defaultPath(path: string) {
-  return resolve(import.meta.dirname || "", "..", path);
-}
-
 function applyDefaults(unresolvedConfig: Record<string, unknown>): Config {
+  function path(prop: string, path: string) {
+    if (unresolvedConfig[prop]) {
+      return resolve(unresolvedConfig[prop] as string);
+    }
+    return resolve(import.meta.dirname || "", "..", path);
+  }
+
   return {
     ...unresolvedConfig,
-    profilePath: resolve(
-      unresolvedConfig.profilePath as string || defaultPath("state/profile"),
-    ),
-    outputPath: resolve(
-      unresolvedConfig.outputPath as string || defaultPath("output"),
-    ),
-    consolidatedPath: resolve(
-      unresolvedConfig.outputPath as string || defaultPath("consolidated"),
-    ),
+    profilePath: path("profilePath", "state/profile"),
+    outputPath: path("outputPath", "output"),
+    consolidatedPath: path("consolidatedPath", "consolidated"),
     sources: [] as SourceParams[],
     scheduler: unresolvedConfig.scheduler || {},
-    rulesPath: unresolvedConfig.rulesPath as string || 'pesca.rules',
+    rulesPath: unresolvedConfig.rulesPath as string || "pesca.rules",
   };
 }
 
@@ -166,7 +163,8 @@ export async function resolveConfig({
     ),
     task(
       "Resolving source credentials",
-      ({ task }) => resolveSources({ task, config: unresolvedConfig, resolvedConfig }),
+      ({ task }) =>
+        resolveSources({ task, config: unresolvedConfig, resolvedConfig }),
     ),
   ], { concurrency: 3 });
 
