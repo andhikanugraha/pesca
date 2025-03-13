@@ -19,6 +19,9 @@ export function deduplicateTransactions(
   for (const [filePath, transactions] of fileTransactionsMap) {
     const clearedTransactions = transactions.filter((t) => !t.isPending);
     for (const transaction of clearedTransactions) {
+      if (transaction.description[0] === "*") {
+        transaction.description = transaction.description.substring(1);
+      }
       const transactionKey = getTransactionKey(transaction);
       const fileToUniqTrx = getOrSet(tKeyToFile, transactionKey, new Map());
       const transactionsInThisFile = getOrSet(fileToUniqTrx, filePath, []);
