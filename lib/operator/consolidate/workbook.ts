@@ -6,8 +6,20 @@ import getRuleMapper from "./rules.ts";
 import { getOrSet } from "./map.ts";
 import { ensureFile, expandGlob } from "@std/fs";
 import { resolve } from "@std/path/resolve";
+import { getTransactionMeta } from "../driver.ts";
 
-type Row = [string, Date, string, number, string, string];
+type Row = [
+  string,
+  Date,
+  string,
+  number,
+  string,
+  string,
+  string,
+  string,
+  string,
+  number | undefined,
+];
 type Mapper = (t: Transaction) => string;
 
 function toDate(plain: Temporal.PlainDate): Date {
@@ -65,10 +77,11 @@ async function loadOverrideMapper(
         string,
         string
       >;
-      if (Category.trim() && Category !== AutoCategory) {
-        map.set(Description, Category.trim());
+      if (Category?.trim() && Category !== AutoCategory) {
+        map.set(Description, Category?.trim());
       }
     }
+    await Deno.truncate(path);
   }
 
   return [
@@ -78,39 +91,62 @@ async function loadOverrideMapper(
 }
 
 function generateWorkbook(
-  transactionRows: Iterable<Row>,
+  transactionRows: Row[],
   overrideRows: Iterable<[string, string]>,
 ): Uint8Array {
   const workbook = XLSX.utils.book_new();
 
   const sheet1 = XLSX.utils.aoa_to_sheet([
-    ["Account", "Date", "Description", "Amount", "Category", "AutoCategory"],
+    [
+      "Account",
+      "Date",
+      "Payee",
+      "Amount",
+      "Category",
+      "AutoCategory",
+      "Description",
+      "Reference",
+      "Original Currency Code",
+      "Original Currency Amount",
+    ],
     ...transactionRows,
   ], {
     cellDates: true,
     dateNF: "yyyy-mm-dd",
   });
-  applyWidths(sheet1, 20, 10, 65, 10, 20, null);
+  applyWidths(sheet1, 20, 10, 65, 10, 20, null, null, 20, 5, 10);
+  const amountColumns = ["D", "J"];
+  for (let row = 2; row <= transactionRows.length + 1; row++) {
+    for (const col of amountColumns) {
+      const cell = sheet1[`${col}${row}`];
+      if (cell) cell.z = "#,##0.00_);\\(#,##0.00\\)";
+    }
+  }
   XLSX.utils.book_append_sheet(workbook, sheet1, "Transactions");
 
   const sheet2 = XLSX.utils.aoa_to_sheet([
     ["Description", "Category"],
     ...overrideRows,
   ]);
-  applyWidths(sheet2, 65, 20);
-  XLSX.utils.book_append_sheet(workbook, sheet2, "Categories");
+  applyWidths(sheet2, 40, 20);
+  XLSX.utils.book_append_sheet(workbook, sheet2, "Categorisation");
 
   return XLSX.writeXLSX(workbook, { type: "buffer", cellStyles: true });
 }
 
 function toRow(t: Transaction, map: Mapper, overrideMap: Mapper): Row {
+  const meta = getTransactionMeta(t);
   return [
     t.account,
     toDate(t.date),
-    t.description,
+    meta.displayText || meta.payeeName || t.description,
     t.amount,
     overrideMap(t) || map(t),
     map(t),
+    t.description,
+    meta.reference || "",
+    meta.originalCurrencyCode || "",
+    meta.originalCurrencyAmount,
   ];
 }
 export async function writeWorkbooksByYear(

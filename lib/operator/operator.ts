@@ -100,6 +100,7 @@ async function main() {
     }
     Deno.exit(0);
   } catch (_e) {
+    console.error(_e);
     Deno.exit(1);
   }
 }

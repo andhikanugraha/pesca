@@ -1,10 +1,10 @@
 import type { Task } from "tasuku";
 import type { Page } from "playwright";
 import type { UnresolvedSourceParams } from "../config.ts";
-import { Transaction } from "./transaction.ts";
+import { Transaction, type TransactionMeta } from "./transaction.ts";
 
 export type { Task };
-export { Transaction };
+export { Transaction, type TransactionMeta };
 
 export type { SourceParams } from "../config.ts";
 
@@ -21,6 +21,7 @@ export interface DriverDefinition {
   name: string;
   pull: (p: ScraperParams) => Promise<DriverOutput>;
   supportsSource: (p: UnresolvedSourceParams) => boolean;
+  transactionMeta: (t: Transaction) => TransactionMeta;
 }
 
 export interface DriverOutput {

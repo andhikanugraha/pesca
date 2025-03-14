@@ -1,30 +1,12 @@
 import { ensureFile } from "@std/fs";
 import task from "tasuku";
 
-import {
-  DriverDefinition,
-  DriverOutput,
-  SourceParams,
-  Task,
-  Transaction,
-} from "./lib.ts";
+import { DriverOutput, SourceParams, Task, Transaction } from "./lib.ts";
 
 import type { Config } from "../config.ts";
 import { withBrowserContext, type WithPage } from "./browser.ts";
 
-import citi from "./drivers/citi.ts";
-import dbs from "./drivers/dbs.ts";
-
-function selectDriver(
-  source: SourceParams,
-): DriverDefinition | undefined {
-  const drivers = [citi, dbs];
-  for (const driver of drivers) {
-    if (driver.supportsSource(source)) {
-      return driver;
-    }
-  }
-}
+import { selectDriver } from "./driver.ts";
 
 function getOutputBasePath({ config }: { config: Config }): string {
   const now = Temporal.Now.plainDateTimeISO();
@@ -195,7 +177,9 @@ export async function executePull(config: Config) {
       artifactBasePath,
       withPage,
     });
-    await writeCombinedOutput({ artifactBasePath, outputs });
-    await writeSyncPlaceholder({ artifactBasePath, outputs });
+    task("Generating combined artifacts", async () => {
+      await writeCombinedOutput({ artifactBasePath, outputs });
+      await writeSyncPlaceholder({ artifactBasePath, outputs });
+    });
   });
 }

@@ -2,7 +2,12 @@ import { stringify as stringifyCsv } from "@std/csv";
 import type { Page } from "playwright";
 import * as cheerio from "cheerio";
 
-import { defineDriver, parseFloatSafely, Transaction } from "../lib.ts";
+import {
+  defineDriver,
+  parseFloatSafely,
+  Transaction,
+  type TransactionMeta,
+} from "../lib.ts";
 
 /*
 notes:
@@ -103,7 +108,102 @@ async function processTransactionsTable(
   }
 }
 
-function parseTable(tableHTML: string): [string[][], Transaction[]] {
+function parseNumber(str: string, withCurrencyCode = true): string {
+  // SGD 1,234.56
+  if (withCurrencyCode) str = str.substring(4);
+  str = str.replace(",", "");
+  return str;
+}
+
+interface ParsedRemarks extends TransactionMeta {
+  description: string;
+}
+function parseRemarks(remarks: string): ParsedRemarks {
+  remarks = remarks?.trim() || "";
+  if (remarks[0] === "*") {
+    remarks = remarks.substring(1);
+  }
+
+  const fees = [
+    "CCY CONVERSION FEE",
+    "CITI PAYALL SERVICE FEE",
+    "MILES TRANSFER FEE",
+    "GST ON MILES TRANSFER FEE",
+  ];
+  for (const fee of fees) {
+    if (remarks.startsWith(fee)) {
+      return {
+        description: remarks,
+        displayText: fee,
+      };
+    }
+  }
+
+  const description = remarks;
+  let payeeName = remarks.substring(0, 25).trimEnd();
+  const payeeCity = remarks.substring(25, 38).trimEnd();
+  const payeeCountryCode = remarks.substring(38, 40);
+
+  // Sanitise payeeName
+  const gateways = [
+    "PAYPAL *",
+    "KrisPay*",
+    "GOOGLE*",
+    "Google ",
+    "SNP*",
+    "PAYALL RENTAL      -",
+  ];
+  const toTrim = [
+    "BUS/MRT",
+    "TRANSIT",
+  ];
+  for (const gateway of gateways) {
+    if (payeeName.startsWith(gateway)) {
+      payeeName = payeeName.substring(gateway.length).trimStart();
+    }
+  }
+  for (const text of toTrim) {
+    if (payeeName.startsWith(text)) {
+      payeeName = text;
+    }
+  }
+
+  if (payeeName.includes("*")) {
+    payeeName = payeeName.substring(0, payeeName.indexOf("*")).trim();
+  }
+
+  const extra = remarks.substring(41).split(" ");
+  let _pan = "";
+  let originalCurrencyCode = "";
+  let originalCurrencyAmountString = "";
+  let originalCurrencyAmount = undefined;
+  if (extra.length === 3) {
+    [_pan, originalCurrencyCode, originalCurrencyAmountString] = extra;
+    originalCurrencyAmount = parseFloatSafely(
+      parseNumber(originalCurrencyAmountString, false),
+    );
+  } else if (extra.length === 2) {
+    [originalCurrencyCode, originalCurrencyAmountString] = extra;
+    originalCurrencyAmount = parseFloatSafely(
+      parseNumber(originalCurrencyAmountString, false),
+    );
+  } else {
+    [_pan] = extra;
+  }
+
+  return {
+    description,
+    payeeName,
+    payeeCity,
+    payeeCountryCode,
+    originalCurrencyCode,
+    originalCurrencyAmount,
+  };
+}
+
+function parseTable(
+  tableHTML: string,
+): [(string | undefined)[][], Transaction[]] {
   const $ = cheerio.load(tableHTML, null, false);
   const tbody = $("tbody");
 
@@ -132,15 +232,8 @@ function parseTable(tableHTML: string): [string[][], Transaction[]] {
     return cells;
   }
 
-  function parseNumber(str: string): string {
-    // SGD 1,234.56
-    str = str.substring(4);
-    str = str.replace(",", "");
-    return str;
-  }
-
   // CSV rows emulating a CSV download
-  const csvRows: string[][] = [];
+  const csvRows: (string | undefined)[][] = [];
   const transactions: Transaction[] = [];
   $("tr", tbody).each(function () {
     const parsedRow = parseRow(this);
@@ -155,11 +248,6 @@ function parseTable(tableHTML: string): [string[][], Transaction[]] {
     const credit = parseNumber(rawCredit);
     const amountString = credit || debit;
 
-    // Add CSV row emulating a CSV download
-    if (!pending) {
-      csvRows.push([rawDate, remarks, amountString, "", maskedPAN]);
-    }
-
     // Parse the transaction
     const [d, m, y] = rawDate.split("/");
     const date = new Temporal.PlainDate(parseInt(y), parseInt(m), parseInt(d));
@@ -170,14 +258,41 @@ function parseTable(tableHTML: string): [string[][], Transaction[]] {
 
     const isPending = !!pending;
 
+    const {
+      description,
+      payeeName: merchantName,
+      payeeCity: merchantCity,
+      payeeCountryCode: merchantCountryCode,
+      originalCurrencyCode,
+      originalCurrencyAmount,
+    } = parseRemarks(remarks);
+
+    // Add CSV row emulating a CSV download
+    if (!pending) {
+      csvRows.push([
+        rawDate,
+        description,
+        amountString,
+        "",
+        maskedPAN,
+        merchantName,
+        merchantCity,
+        merchantCountryCode,
+        originalCurrencyCode,
+        originalCurrencyAmount?.toString(),
+      ]);
+    }
+
     const account = `Citi ` + maskedPAN.substring(maskedPAN.length - 4);
     const transaction = new Transaction(
       account,
       date,
-      remarks,
+      description.substring(0, 40),
       amount,
       isDebit,
       isPending,
+      "citibank.com.sg",
+      description,
     );
 
     transactions.unshift(transaction);
@@ -189,6 +304,7 @@ function parseTable(tableHTML: string): [string[][], Transaction[]] {
 export default defineDriver({
   name: "citibank.com.sg",
   supportsSource: (source) => !!source.website?.includes("citibank.com.sg"),
+  transactionMeta: (t) => parseRemarks(t.description),
   async pull({ task, page, source, storeArtifact }) {
     if (!source.username || !source.password) {
       throw new Error("No username/password specified.");
@@ -198,7 +314,7 @@ export default defineDriver({
     const password = source.password;
 
     let tableHTML: string = "";
-    let csvRows: string[][] = [];
+    let csvRows: (string | undefined)[][] = [];
     let transactions: Transaction[] = [];
 
     const URL =

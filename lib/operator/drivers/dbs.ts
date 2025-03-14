@@ -2,7 +2,76 @@ import { parse as parseCsv } from "@std/csv";
 import getStream from "get-stream";
 import * as cheerio from "cheerio";
 
-import { defineDriver, parseFloatSafely, Transaction } from "../lib.ts";
+import {
+  defineDriver,
+  parseFloatSafely,
+  Transaction,
+  TransactionMeta,
+} from "../lib.ts";
+
+function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
+  r4 = r4.substring(5);
+
+  let displayText;
+  let payeeName = "";
+  let reference = "";
+
+  if (r0 === "ITR" || r0 === "INT") {
+    displayText = "Interest";
+  } else if (r2.startsWith("TOP-UP TO PAYLAH! :")) {
+    payeeName = r3;
+  } else if (r0 === "POS" && r1 === "NETS") {
+    payeeName = r3;
+  } else if (
+    (r1 === "POS" && r2.startsWith("NETS ")) ||
+    (r1 === "ICT" && r2.startsWith("Incoming PayNow Ref ")) ||
+    (r1 === "ICT" && r2.startsWith("PayNow Transfer "))
+  ) {
+    payeeName = r3?.substring(r3.indexOf(":") + 2);
+    if (r4 !== "PayNow Transfer" && r4 !== "OTHR") reference = r4;
+  } else if (r0 === "GR" || r0 === "POS") {
+    payeeName = r2;
+  } else {
+    displayText = `${r2} ${r3}`;
+  }
+
+  return {
+    displayText,
+    payeeName: payeeName,
+    reference,
+  };
+}
+
+function parseHeader(headerRow: string[]): {
+  ref0: number;
+  ref0a: number | undefined;
+  ref1: number;
+  ref2: number;
+  ref3: number;
+  isPOSB: boolean;
+} {
+  const isPOSB = headerRow.includes("Transaction Ref1");
+
+  let ref0: number,
+    ref1: number,
+    ref2: number,
+    ref3: number,
+    ref0a: number;
+
+  if (isPOSB) {
+    ref0 = ref0a = headerRow.indexOf("Reference");
+    ref1 = headerRow.indexOf("Transaction Ref1");
+    ref2 = headerRow.indexOf("Transaction Ref2");
+    ref3 = headerRow.indexOf("Transaction Ref3");
+  } else {
+    ref0 = headerRow.indexOf("Statement Code");
+    ref0a = headerRow.indexOf("Reference");
+    ref1 = headerRow.indexOf("Client Reference");
+    ref2 = headerRow.indexOf("Additional Reference");
+    ref3 = headerRow.indexOf(" Misc Reference");
+  }
+  return { ref0, ref0a, ref1, ref2, ref3, isPOSB };
+}
 
 function parseDbsCsv(contents: string): Transaction[] {
   if (!contents.includes("Account Details For:")) {
@@ -22,21 +91,7 @@ function parseDbsCsv(contents: string): Transaction[] {
     throw new Error("Invalid CSV");
   }
 
-  const isPOSB = headerRow.includes("Transaction Ref1");
-
-  let ref0: number, ref1: number, ref2: number, ref3: number;
-
-  if (isPOSB) {
-    ref0 = headerRow.indexOf("Reference");
-    ref1 = headerRow.indexOf("Transaction Ref1");
-    ref2 = headerRow.indexOf("Transaction Ref2");
-    ref3 = headerRow.indexOf("Transaction Ref3");
-  } else {
-    ref0 = headerRow.indexOf("Statement Code");
-    ref1 = headerRow.indexOf("Client Reference");
-    ref2 = headerRow.indexOf("Additional Reference");
-    ref3 = headerRow.indexOf("Misc Reference");
-  }
+  const { ref0, ref0a, ref1, ref2, ref3 } = parseHeader(headerRow);
 
   function buildDescription(row: string[]) {
     const parts: string[] = [];
@@ -48,6 +103,16 @@ function parseDbsCsv(contents: string): Transaction[] {
     if (!parts.length) return row[ref0];
 
     return parts.join(" ").replace(/\s+/g, " ");
+  }
+
+  function buildRaw(row: string[]): string[] {
+    return [
+      row[ref0],
+      row[ref0a || ref0],
+      row[ref1],
+      row[ref2],
+      row[ref3],
+    ];
   }
 
   const idxCreditAmount = headerRow.indexOf("Credit Amount");
@@ -64,6 +129,8 @@ function parseDbsCsv(contents: string): Transaction[] {
       "Asia/Singapore",
     ).toPlainDate();
 
+    const rawRefs = buildRaw(cells);
+
     // parse desc
     const description = buildDescription(cells);
 
@@ -74,7 +141,16 @@ function parseDbsCsv(contents: string): Transaction[] {
     const isDebit = debitAmount > 0;
 
     transactions.unshift(
-      new Transaction(account, date, description, absoluteAmount, isDebit),
+      new Transaction(
+        account,
+        date,
+        description,
+        absoluteAmount,
+        isDebit,
+        undefined,
+        "dbs.com.sg",
+        rawRefs,
+      ),
     );
   }
 
@@ -84,6 +160,7 @@ function parseDbsCsv(contents: string): Transaction[] {
 export default defineDriver({
   name: "dbs.com.sg",
   supportsSource: (source) => !!source.website?.includes("dbs.com.sg"),
+  transactionMeta: (t) => parseRowMeta(t.raw as string[]),
   async pull({ source, page, storeArtifact, task }) {
     const { username, password } = source;
     if (!username || !password) {

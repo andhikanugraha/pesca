@@ -1,6 +1,16 @@
 import { JsonValue } from "@std/json";
 import { CsvStringifyStream } from "@std/csv";
 
+export interface TransactionMeta {
+  displayText?: string;
+  reference?: string;
+  payeeName?: string;
+  payeeCity?: string;
+  payeeCountryCode?: string;
+  originalCurrencyCode?: string;
+  originalCurrencyAmount?: number;
+}
+
 export class Transaction {
   account: string;
   date: Temporal.PlainDate;
@@ -8,6 +18,8 @@ export class Transaction {
   absoluteAmount: number;
   isDebit: boolean;
   isPending: boolean;
+  driver: string;
+  raw: unknown;
 
   constructor(
     account: string,
@@ -16,6 +28,8 @@ export class Transaction {
     absoluteAmount: number,
     isDebit = true,
     isPending = false,
+    driver = "",
+    raw: unknown = null,
   ) {
     this.account = account;
     this.date = date;
@@ -23,6 +37,8 @@ export class Transaction {
     this.absoluteAmount = absoluteAmount;
     this.isDebit = isDebit;
     this.isPending = isPending;
+    this.driver = driver;
+    this.raw = raw;
   }
 
   get amount() {
@@ -36,6 +52,8 @@ export class Transaction {
     absoluteAmount,
     isDebit,
     isPending,
+    driver = "",
+    raw = null,
   }: {
     account: string;
     date: string;
@@ -43,6 +61,8 @@ export class Transaction {
     absoluteAmount: number;
     isDebit: boolean;
     isPending: boolean;
+    driver?: string;
+    raw?: unknown;
   }) {
     return new Transaction(
       account,
@@ -51,12 +71,17 @@ export class Transaction {
       absoluteAmount,
       isDebit,
       isPending,
+      driver,
+      raw,
     );
   }
 
   // Revive Transaction objects from JSON
   static reviver(_key: string, value: JsonValue) {
-    if (typeof value !== "object" || !("date" in (value as object))) {
+    if (
+      value === null || typeof value !== "object" ||
+      !("date" in (value as object))
+    ) {
       return value;
     }
 
@@ -68,6 +93,7 @@ export class Transaction {
         absoluteAmount: number;
         isDebit: boolean;
         isPending: boolean;
+        payee: string;
       },
     );
   }
