@@ -28,6 +28,7 @@ const childFlags = [
   "--allow-sys",
   "--allow-env",
   "--allow-run",
+  "--allow-net",
   "--allow-import=cdn.sheetjs.com,jsr.io",
   "--unstable-temporal",
 ];

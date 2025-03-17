@@ -7,6 +7,7 @@ import type { Config } from "../config.ts";
 import { withBrowserContext, type WithPage } from "./browser.ts";
 
 import { selectDriver } from "./driver.ts";
+import { generateNotifyFn, type NotifyFn } from "./pushover.ts";
 
 function getOutputBasePath({ config }: { config: Config }): string {
   const now = Temporal.Now.plainDateTimeISO();
@@ -29,6 +30,7 @@ async function processSource({
   task,
   artifactBasePath,
   outputs,
+  notify,
 }: {
   source: SourceParams;
   setError: (e?: Error | string) => void;
@@ -36,6 +38,7 @@ async function processSource({
   task: Task;
   artifactBasePath: string;
   outputs: DriverOutput[];
+  notify: NotifyFn;
 }): Promise<void> {
   const { key } = source;
 
@@ -61,21 +64,27 @@ async function processSource({
   }
 
   try {
+    notify({ title: key, message: "Starting scraping...", priority: -1 });
     await withPage(async (page) => {
-      try {
-        const output = await driver.pull({
-          source,
-          task,
-          page,
-          storeArtifact,
-        });
+      const output = await driver.pull({
+        source,
+        task,
+        page,
+        storeArtifact,
+        notify: ({ message, title = key, device = source.device }) =>
+          notify({ message, title, device }),
+      });
 
-        outputs.push(output);
-      } catch (e) {
-        setError(e as Error);
-      }
+      outputs.push(output);
+      await notify({
+        title: key,
+        message:
+          `Scraping successful. Extracted ${output.transactions.length} transactions.`,
+        priority: -1,
+      });
     });
   } catch {
+    await notify({ title: key, message: "Scraping failed." });
     setError(`Failed processing source: ${key}`);
   }
 }
@@ -121,6 +130,7 @@ async function processSources({
   withPage: WithPage;
 }): Promise<DriverOutput[]> {
   const outputs: DriverOutput[] = [];
+  const notify = generateNotifyFn(config);
   await task.group((task) =>
     config.sources.map((source) => {
       return task(
@@ -133,6 +143,7 @@ async function processSources({
             setError,
             outputs,
             artifactBasePath,
+            notify,
           }),
       );
     })

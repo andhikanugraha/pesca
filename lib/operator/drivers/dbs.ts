@@ -1,15 +1,20 @@
 import { parse as parseCsv } from "@std/csv";
-import getStream from "get-stream";
 import * as cheerio from "cheerio";
+import getStream from "get-stream";
 
 import {
   defineDriver,
+  type FrameLocator,
+  type NotifyFn,
+  type Page,
   parseFloatSafely,
   Transaction,
-  TransactionMeta,
+  type TransactionMeta,
 } from "../lib.ts";
 
-function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
+const DRIVER_NAME = "dbs.com.sg";
+
+export function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
   r4 = r4.substring(5);
 
   let displayText;
@@ -73,7 +78,110 @@ function parseHeader(headerRow: string[]): {
   return { ref0, ref0a, ref1, ref2, ref3, isPOSB };
 }
 
-function parseDbsCsv(contents: string): Transaction[] {
+async function processLogin(
+  { page, username, password }: {
+    page: Page;
+    username: string;
+    password: string;
+  },
+) {
+  await page.goto("https://internet-banking.dbs.com.sg/IB/Welcome");
+
+  await page.locator("#UID").click();
+  await page.locator("#UID").fill(username);
+  await page.locator("#PIN").click();
+  await page.locator("#PIN").fill(password);
+  await page.getByRole("button", { name: "Login" }).click();
+}
+
+async function process2FA(
+  { notify, key, frame, setTitle }: {
+    notify: NotifyFn;
+    key: string;
+    frame: FrameLocator;
+    setTitle: (title: string) => void;
+  },
+) {
+  await notify({
+    message: `Scraping ${key}. Please open the DBS app to authenticate.`,
+  });
+  await frame.getByRole("link", { name: "Authenticate now" }).click();
+  setTitle("Waiting for digital token authentication...");
+
+  await frame
+    .locator("#userBar")
+    .getByText("View Transaction History")
+    .click({ timeout: 60000 });
+  setTitle("Authenticated");
+
+  await notify({ message: "Authentication successful." });
+}
+
+async function getAccounts(frame: FrameLocator) {
+  const selectorHTML = await frame.locator("#account_number_select")
+    .innerHTML();
+  const $ = cheerio.load(selectorHTML, null, false);
+  const options = $("option");
+  const accounts: [string, string][] = [];
+  options.each((_, option) => {
+    const value = $(option).attr("value");
+    const label = $(option).text().trim();
+    if (value && label && !label.includes("Fixed")) {
+      accounts.push([value, label]);
+    }
+  });
+
+  return accounts;
+}
+
+async function processAccount(
+  { frame, page, optionValue, transactions, label, storeArtifact }: {
+    frame: FrameLocator;
+    page: Page;
+    optionValue: string;
+    label: string;
+    transactions: Transaction[];
+    storeArtifact: (name: string, contents: string) => Promise<void>;
+  },
+): Promise<void> {
+  await frame.locator("#account_number_select").selectOption(optionValue);
+  await frame.locator("#currency2").selectOption("SGD");
+  await frame.locator("#transPeriod").click();
+  await frame.locator("li").filter({ hasText: "Last 6 Months" }).click();
+  await frame.getByRole("button", { name: "Go" }).click();
+  await page.waitForTimeout(1000);
+
+  async function triggerDownloadCsv() {
+    await page.waitForTimeout(1000);
+    const downloadPromise = page.waitForEvent("download");
+    await frame.getByRole("link", { name: "Download" }).click();
+    const download = await downloadPromise;
+    const downloadedString = getStream(await download.createReadStream());
+    await page.waitForTimeout(1000);
+
+    return downloadedString;
+  }
+
+  const csvStrings: string[] = [];
+  const tabs = frame.locator("#main-tabs li");
+  const tabCount = await tabs.count();
+  if (tabCount === 0) {
+    csvStrings.push(await triggerDownloadCsv());
+  } else {
+    for (let i = 0; i < tabCount; i++) {
+      const element = tabs.nth(i);
+      await element.click();
+      csvStrings.push(await triggerDownloadCsv());
+    }
+  }
+
+  for (const [index, csvString] of csvStrings.entries()) {
+    await storeArtifact(`${label} ${index}.csv`, csvString);
+    transactions.push(...parseDbsCsv(csvString));
+  }
+}
+
+export function parseDbsCsv(contents: string): Transaction[] {
   if (!contents.includes("Account Details For:")) {
     throw new Error("Invalid CSV");
   }
@@ -148,7 +256,7 @@ function parseDbsCsv(contents: string): Transaction[] {
         absoluteAmount,
         isDebit,
         undefined,
-        "dbs.com.sg",
+        DRIVER_NAME,
         rawRefs,
       ),
     );
@@ -158,23 +266,17 @@ function parseDbsCsv(contents: string): Transaction[] {
 }
 
 export default defineDriver({
-  name: "dbs.com.sg",
+  name: DRIVER_NAME,
   supportsSource: (source) => !!source.website?.includes("dbs.com.sg"),
   transactionMeta: (t) => parseRowMeta(t.raw as string[]),
-  async pull({ source, page, storeArtifact, task }) {
+  async pull({ source, page, storeArtifact, task, notify }) {
     const { username, password } = source;
     if (!username || !password) {
       throw new Error("No username/password provided.");
     }
 
     task("Logging in", async () => {
-      await page.goto("https://internet-banking.dbs.com.sg/IB/Welcome");
-
-      await page.locator("#UID").click();
-      await page.locator("#UID").fill(username);
-      await page.locator("#PIN").click();
-      await page.locator("#PIN").fill(password);
-      await page.getByRole("button", { name: "Login" }).click();
+      await processLogin({ page, username, password });
     });
 
     const frame = page
@@ -182,84 +284,32 @@ export default defineDriver({
       .frameLocator('iframe[name="iframe1"]');
 
     await task("Initiating digital token prompt", async ({ setTitle }) => {
-      await frame.getByRole("link", { name: "Authenticate now" }).click();
-      setTitle("Waiting for digital token authentication...");
-
-      await frame
-        .locator("#userBar")
-        .getByText("View Transaction History")
-        .click({ timeout: 60_000 });
-      setTitle("Authenticated");
+      await process2FA({ notify, key: source.key || "", frame, setTitle });
     });
 
-    const selectorHTML = await frame
-      .locator("#account_number_select")
-      .innerHTML();
-    const $ = cheerio.load(selectorHTML, null, false);
-    const options = $("option");
-    const accounts: [string, string][] = [];
-    options.each((_, option) => {
-      const value = $(option).attr("value");
-      const label = $(option).text().trim();
-      if (value && label && !label.includes("Fixed")) {
-        accounts.push([value, label]);
-      }
-    });
     // iterate through options under selector, but ignore deposits (0030)
-
-    async function processAccount(optionValue: string): Promise<string[]> {
-      await frame.locator("#account_number_select").selectOption(optionValue);
-      await frame.locator("#currency2").selectOption("SGD");
-      await frame.locator("#transPeriod").click();
-      await frame.locator("li").filter({ hasText: "Last 6 Months" }).click();
-      await frame.getByRole("button", { name: "Go" }).click();
-      await page.waitForTimeout(1000);
-
-      const csvStrings: string[] = [];
-
-      const tabs = frame.locator("#main-tabs li");
-      const tabCount = await tabs.count();
-      if (tabCount === 0) {
-        csvStrings.push(await triggerDownloadCsv());
-      } else {
-        for (let i = 0; i < tabCount; i++) {
-          const element = tabs.nth(i);
-          await element.click();
-          csvStrings.push(await triggerDownloadCsv());
-        }
-      }
-
-      return csvStrings;
-    }
-
-    async function triggerDownloadCsv() {
-      await page.waitForTimeout(1000);
-      const downloadPromise = page.waitForEvent("download");
-      await frame.getByRole("link", { name: "Download" }).click();
-      const download = await downloadPromise;
-      const downloadedString = getStream(await download.createReadStream());
-      await page.waitForTimeout(1000);
-
-      return downloadedString;
-    }
+    const accounts = await getAccounts(frame);
 
     const transactions: Transaction[] = [];
     await task.group((task) =>
-      accounts.map(([value, label]) =>
-        task(label, async () => {
-          const csvStrings = await processAccount(value);
-          for (const [index, csvString] of csvStrings.entries()) {
-            await storeArtifact(`${label} ${index}.csv`, csvString);
-            transactions.push(...parseDbsCsv(csvString));
-          }
-        })
+      accounts.map(([optionValue, label]) =>
+        task(
+          label,
+          () =>
+            processAccount({
+              frame,
+              page,
+              optionValue,
+              label,
+              transactions,
+              storeArtifact,
+            }),
+        )
       )
     );
 
-    await page
-      .frameLocator('frame[name="user_area"]')
-      .getByRole("link", { name: "Proceed to Logout" })
-      .click();
+    await page.frameLocator('frame[name="user_area"]')
+      .getByRole("link", { name: "Proceed to Logout" }).click();
     await frame.getByRole("button", { name: "Logout Now" }).click();
 
     return { transactions };

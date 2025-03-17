@@ -9,6 +9,7 @@ export interface SourceParams {
   username?: string;
   password?: string;
   website?: string;
+  device?: string;
   [key: string]: unknown;
 }
 
@@ -21,6 +22,12 @@ export interface SchedulerParams {
   retryInterval?: string;
 }
 
+export interface PushoverConfigParams {
+  token: string;
+  user: string;
+  device?: string;
+}
+
 export interface Config {
   profilePath: string;
   outputPath: string;
@@ -28,6 +35,7 @@ export interface Config {
   sources: SourceParams[];
   scheduler: SchedulerParams;
   rulesPath: string;
+  pushover?: PushoverConfigParams;
 }
 
 async function init1Password() {
@@ -70,7 +78,8 @@ async function assignFrom1Password(
   await Promise.all(promises);
 
   if (!target.key) {
-    target.key = opBasePath.replace(/[/\\|:<>?*"]/g, "_");
+    const basename = opBasePath.substring(opBasePath.indexOf("/") + 1);
+    target.key = basename.replace(/[/\\|:<>?*"]/g, "_");
   }
 
   return target;
