@@ -6,8 +6,9 @@ type FPath = string;
 type TKey = string;
 
 function getTransactionKey(t: Transaction): TKey {
-  const { date, description, account, amount } = t;
-  return `${account}\x1F${date.toString()}\x1F${description}\x1F${amount}`;
+  const { date, description, account, amount, raw } = t;
+  const text = JSON.stringify(raw || description);
+  return `${account}\x1F${date.toString()}\x1F${text}\x1F${amount}`;
 }
 
 export function deduplicateTransactions(

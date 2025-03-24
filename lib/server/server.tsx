@@ -2,9 +2,12 @@ import { Hono } from "hono";
 import { serveStatic } from "hono/deno";
 import { relative, resolve } from "@std/path";
 import { type ReactNode } from "hono/jsx";
+import task from "tasuku";
 
 import { type Scheduler } from "../scheduler/scheduler.ts";
 import { type Operator } from "../operator/operator.ts";
+import { Config } from "../config.ts";
+import { forwardServer, type NgrokConfig } from "./ngrok.ts";
 
 function serveFile(path: string) {
   const relativePath = relative(
@@ -77,15 +80,20 @@ function Time(
       minute="2-digit"
       time-zone-name="shortGeneric"
       prefix=""
+      tense={tense}
     >
       {text}
     </relative-time>
   );
 }
 
-export default function createServer(
-  { scheduler, operator }: { scheduler: Scheduler; operator: Operator },
-): Hono {
+export default function startServer(
+  { config, scheduler, operator }: {
+    config: Config;
+    scheduler: Scheduler;
+    operator: Operator;
+  },
+): Deno.HttpServer<Deno.NetAddr> | null {
   const app = new Hono();
 
   app.get("/sakura.css", serveFile("sakura.css"));
@@ -167,5 +175,21 @@ export default function createServer(
     return c.redirect("/");
   });
 
-  return app;
+  let server: Deno.HttpServer<Deno.NetAddr> | null = null;
+  task("Initiating server", async ({ setTitle, task }) => {
+    server = Deno.serve(app.fetch);
+    setTitle(`Listening to ${server.addr.hostname}:${server.addr.port}`);
+    if (server && config.ngrok) {
+      await task(
+        "Forwarding to ngrok",
+        () =>
+          forwardServer({
+            server: server as Deno.HttpServer<Deno.NetAddr>,
+            config: config.ngrok as NgrokConfig,
+          }),
+      );
+    }
+  });
+
+  return server;
 }

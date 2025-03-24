@@ -140,6 +140,7 @@ function parseRemarks(remarks: string): ParsedRemarks {
   }
 
   const description = remarks;
+  let reference: string | undefined = undefined;
   let payeeName = remarks.substring(0, 25).trimEnd();
   const payeeCity = remarks.substring(25, 38).trimEnd();
   const payeeCountryCode = remarks.substring(38, 40);
@@ -151,6 +152,8 @@ function parseRemarks(remarks: string): ParsedRemarks {
     "GOOGLE*",
     "Google ",
     "SNP*",
+    "OPN*",
+    "FP*",
     "PAYALL RENTAL      -",
   ];
   const toTrim = [
@@ -168,8 +171,15 @@ function parseRemarks(remarks: string): ParsedRemarks {
     }
   }
 
-  if (payeeName.includes("*")) {
-    payeeName = payeeName.substring(0, payeeName.indexOf("*")).trim();
+  if (payeeName.match(/^SINGAPOR[0-9]+$/)) {
+    reference = payeeName.substring(8);
+    payeeName = "SINGAPORE AIRLINES";
+  }
+
+  if (payeeName.match(/^(Grab|NAME-CHEAP\.COM)\*/)) {
+    const pos = payeeName.indexOf("*");
+    reference = payeeName.substring(pos + 1).trim();
+    payeeName = payeeName.substring(0, pos).trim();
   }
 
   const extra = remarks.substring(41).split(" ");
@@ -196,6 +206,7 @@ function parseRemarks(remarks: string): ParsedRemarks {
     payeeName,
     payeeCity,
     payeeCountryCode,
+    reference,
     originalCurrencyCode,
     originalCurrencyAmount,
   };
@@ -304,7 +315,7 @@ function parseTable(
 export default defineDriver({
   name: "citibank.com.sg",
   supportsSource: (source) => !!source.website?.includes("citibank.com.sg"),
-  transactionMeta: (t) => parseRemarks(t.description),
+  transactionMeta: (t) => parseRemarks(t.raw as string),
   async pull({ task, page, source, storeArtifact }) {
     if (!source.username || !source.password) {
       throw new Error("No username/password specified.");

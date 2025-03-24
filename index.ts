@@ -2,7 +2,7 @@ import { resolve } from "@std/path";
 import { parse } from "@std/yaml";
 import open from "open";
 import { createOperator } from "./lib/operator/operator.ts";
-import createServer from "./lib/server/server.tsx";
+import startServer from "./lib/server/server.tsx";
 import task from "tasuku";
 import { createScheduler } from "./lib/scheduler/scheduler.ts";
 import { type Config, resolveConfig } from "./lib/config.ts";
@@ -29,12 +29,12 @@ async function main(pathToConfigYaml = "pesca.yml") {
   );
 
   if (operator) {
-    task("Initiating server", async ({ setTitle }) => {
-      const server = createServer({ scheduler, operator });
-      const s = Deno.serve(server.fetch);
-      setTitle(`Listening to ${s.addr.hostname}:${s.addr.port}`);
-      await open(`http://localhost:${s.addr.port}/`);
-    });
+    const server = await startServer({ config, scheduler, operator });
+    if (server) {
+      await open(
+        `http://${config.ngrok?.domain || `localhost:${server.addr.port}`}/`,
+      );
+    }
   }
 }
 

@@ -96,7 +96,32 @@ function generateWorkbook(
 ): Uint8Array {
   const workbook = XLSX.utils.book_new();
 
-  const sheet1 = XLSX.utils.aoa_to_sheet([
+  // Transactions worksheet
+  const sheet1 = generateTransactionWorksheet(transactionRows);
+  XLSX.utils.book_append_sheet(workbook, sheet1, "Transactions");
+
+  // Payees worksheet
+  const payees = new Set(transactionRows.map((row) => row[2]));
+  const sortedPayees = [...payees].sort();
+  const sheet2 = XLSX.utils.aoa_to_sheet([
+    ["Payee", "Category"],
+    ...sortedPayees.map((p) => [p]),
+  ]);
+  applyWidths(sheet2, 40, 20);
+  XLSX.utils.book_append_sheet(workbook, sheet2, "Payees");
+
+  const sheet3 = XLSX.utils.aoa_to_sheet([
+    ["Description", "Category"],
+    ...overrideRows,
+  ]);
+  applyWidths(sheet3, 40, 20);
+  XLSX.utils.book_append_sheet(workbook, sheet3, "Categorisation");
+
+  return XLSX.writeXLSX(workbook, { type: "buffer", cellStyles: true });
+}
+
+function generateTransactionWorksheet(transactionRows: Row[]) {
+  const sheet = XLSX.utils.aoa_to_sheet([
     [
       "Account",
       "Date",
@@ -114,24 +139,21 @@ function generateWorkbook(
     cellDates: true,
     dateNF: "yyyy-mm-dd",
   });
-  applyWidths(sheet1, 20, 10, 65, 10, 20, null, null, 20, 5, 10);
+  applyWidths(sheet, 20, 10, 40, 10, 20, null, null, 20, 5, 10);
   const amountColumns = ["D", "J"];
   for (let row = 2; row <= transactionRows.length + 1; row++) {
     for (const col of amountColumns) {
-      const cell = sheet1[`${col}${row}`];
+      const cell = sheet[`${col}${row}`];
       if (cell) cell.z = "#,##0.00_);\\(#,##0.00\\)";
     }
   }
-  XLSX.utils.book_append_sheet(workbook, sheet1, "Transactions");
 
-  const sheet2 = XLSX.utils.aoa_to_sheet([
-    ["Description", "Category"],
-    ...overrideRows,
-  ]);
-  applyWidths(sheet2, 40, 20);
-  XLSX.utils.book_append_sheet(workbook, sheet2, "Categorisation");
+  // Add autofilter
+  sheet["!autofilter"] = {
+    ref: sheet["!ref"] as string,
+  };
 
-  return XLSX.writeXLSX(workbook, { type: "buffer", cellStyles: true });
+  return sheet;
 }
 
 function toRow(t: Transaction, map: Mapper, overrideMap: Mapper): Row {
@@ -149,6 +171,7 @@ function toRow(t: Transaction, map: Mapper, overrideMap: Mapper): Row {
     meta.originalCurrencyAmount,
   ];
 }
+
 export async function writeWorkbooksByYear(
   transactions: Transaction[],
   rules: string,

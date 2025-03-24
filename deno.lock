@@ -11,6 +11,8 @@
     "jsr:@std/streams@^1.0.8": "1.0.9",
     "jsr:@std/streams@^1.0.9": "1.0.9",
     "jsr:@std/yaml@^1.0.5": "1.0.5",
+    "npm:@ngrok/ngrok@*": "1.4.1",
+    "npm:@ngrok/ngrok@^1.4.1": "1.4.1",
     "npm:@types/node@*": "22.12.0",
     "npm:cheerio@1": "1.0.0",
     "npm:get-stream@^9.0.1": "9.0.1",
@@ -57,6 +59,63 @@
     }
   },
   "npm": {
+    "@ngrok/ngrok-android-arm-eabi@1.4.1": {
+      "integrity": "sha512-KQe59T8PhFg5XvWypcOCIgUakk/A9ipD1UvSgGuLI7pYIiVcx6oyW12RxCJr6cfdO0K5GrbUG6dlEXSmDD4jBg=="
+    },
+    "@ngrok/ngrok-android-arm64@1.4.1": {
+      "integrity": "sha512-WPYJenabIArkGmeVhBcIVtgXmLK297pfJCYHP1Tnw220ANEXFdo7EW4dZoP0AA0gxciFHGYnQUMOn1Meo0IQFQ=="
+    },
+    "@ngrok/ngrok-darwin-arm64@1.4.1": {
+      "integrity": "sha512-hJW+ZDJ0uV7PieZAdZHdzR/WBRctjOkLzFqHTxSuNbmBr9uIg6PGf1dB2lySszK1wyKZL7wvh4GedQ4vSU5lkw=="
+    },
+    "@ngrok/ngrok-darwin-universal@1.4.1": {
+      "integrity": "sha512-rUZKl/vr2cALpT1Ng91h8Jf5OfDtF+zNEC65AFWthPkHJpPQCLvuEC9hyF8XI52Bv45ORRb1YKR3hdhjZ4WGHQ=="
+    },
+    "@ngrok/ngrok-darwin-x64@1.4.1": {
+      "integrity": "sha512-UKIkRpsGBywAqvwz8L6R8ITz+xxPoZ58LSFhZoMAWm2alGOdA2js1eHZwwVTSz96/tmmSRE/H+r69TvtuL0lXA=="
+    },
+    "@ngrok/ngrok-freebsd-x64@1.4.1": {
+      "integrity": "sha512-v1xXqmu3f4W1PQt+NKlqXgLcpULYCSwStKGRSdgXljg1bRdOnW3ZdjbGzrIdKwQ7OcwZP34KbP13G+hqcTxo5Q=="
+    },
+    "@ngrok/ngrok-linux-arm-gnueabihf@1.4.1": {
+      "integrity": "sha512-yEeiVAGQNUErkSpOI1EZI+X3AkHCGd8yzqfjHamnhEONkwxLcWuTiUfcwFeMVtE9jyLfvQxctldPXXAjvaI/QA=="
+    },
+    "@ngrok/ngrok-linux-arm64-gnu@1.4.1": {
+      "integrity": "sha512-Fb2uju769eO/yOrWdbMvCXNczbXHnqNmN5TCYvqQbPdscFgrsNaJcVr2SmWOfBq+OcLWYbx6mXE1ki5yOZKU9w=="
+    },
+    "@ngrok/ngrok-linux-arm64-musl@1.4.1": {
+      "integrity": "sha512-nMTTZkUnwCzeIVDkoUdNqBKe6ArYXRWGjC4iXinfPOdENkb/tZ/eAjVdg+8bQ5PJgl/n/TbdZKNj//Jz2x8fdw=="
+    },
+    "@ngrok/ngrok-linux-x64-gnu@1.4.1": {
+      "integrity": "sha512-IfDaYd9ZGk7F0szHql5Tr3rlLBlhuKbbNXDVkujGy/njA4/YnckfsZilGEtgnR7aYgHo3NqppfEw+AOmlDytCw=="
+    },
+    "@ngrok/ngrok-linux-x64-musl@1.4.1": {
+      "integrity": "sha512-Ze6wb2umg6hfJhxOrFQhiyIZOf9YjSRkefnaQdAaONrIKxiFsu5SIKQbp7MQRnm8wabB9i0OI0Q/TVBsxo/HLw=="
+    },
+    "@ngrok/ngrok-win32-ia32-msvc@1.4.1": {
+      "integrity": "sha512-FV3dwGpbh1h2fJ7h+Od8vFRrR9RxqBUAI+ELxQxropDxwYp6rWGKFnfE+JUcT79fEH3OpA0ElULrIDrLgK7bgg=="
+    },
+    "@ngrok/ngrok-win32-x64-msvc@1.4.1": {
+      "integrity": "sha512-Zr1Dyel4M3cA1kjT/N5ftTiCdoPnVv/VbyE6AKKemP9DDFkTlpdvMwSXikm/ypNtCNFEs/+q8CBZPhhaKktl8A=="
+    },
+    "@ngrok/ngrok@1.4.1": {
+      "integrity": "sha512-KZ7/T4UOY3BqJBdweJPeebKW34YzIH+a2y4o7yqTIowoi6dw3sMj140o1Q8FvpPbH5J6lr2TWVCWdgSTYvHNgw==",
+      "dependencies": [
+        "@ngrok/ngrok-android-arm-eabi",
+        "@ngrok/ngrok-android-arm64",
+        "@ngrok/ngrok-darwin-arm64",
+        "@ngrok/ngrok-darwin-universal",
+        "@ngrok/ngrok-darwin-x64",
+        "@ngrok/ngrok-freebsd-x64",
+        "@ngrok/ngrok-linux-arm-gnueabihf",
+        "@ngrok/ngrok-linux-arm64-gnu",
+        "@ngrok/ngrok-linux-arm64-musl",
+        "@ngrok/ngrok-linux-x64-gnu",
+        "@ngrok/ngrok-linux-x64-musl",
+        "@ngrok/ngrok-win32-ia32-msvc",
+        "@ngrok/ngrok-win32-x64-msvc"
+      ]
+    },
     "@sec-ant/readable-stream@0.4.1": {
       "integrity": "sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg=="
     },
@@ -299,6 +358,7 @@
       "jsr:@std/path@^1.0.8",
       "jsr:@std/streams@^1.0.9",
       "jsr:@std/yaml@^1.0.5",
+      "npm:@ngrok/ngrok@^1.4.1",
       "npm:cheerio@1",
       "npm:get-stream@^9.0.1",
       "npm:open@^10.1.0",

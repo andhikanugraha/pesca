@@ -1,5 +1,6 @@
 import { resolve } from "@std/path";
 import { ensureDir } from "@std/fs";
+import type { Config as NgrokConfig } from "@ngrok/ngrok"
 
 import type { Task } from "tasuku";
 
@@ -28,6 +29,8 @@ export interface PushoverConfigParams {
   device?: string;
 }
 
+export interface NgrokConfigParams extends NgrokConfig {}
+
 export interface Config {
   profilePath: string;
   outputPath: string;
@@ -36,6 +39,7 @@ export interface Config {
   scheduler: SchedulerParams;
   rulesPath: string;
   pushover?: PushoverConfigParams;
+  ngrok?: NgrokConfigParams;
 }
 
 async function init1Password() {
