@@ -21,6 +21,7 @@ function Layout({ children }: { children: ReactNode }) {
   return (
     <>
       <title>pesca</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
       <link rel="stylesheet" href="/sakura.css" />
       <script src="/relative-time-element.js" type="module" />
       <script
