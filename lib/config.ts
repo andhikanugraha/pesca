@@ -11,6 +11,10 @@ export interface SourceParams {
   password?: string;
   website?: string;
   device?: string;
+  server?: string;
+  port?: number;
+  from?: string;
+  folder?: string;
   [key: string]: unknown;
 }
 
@@ -43,48 +47,70 @@ export interface Config {
   ngrok?: NgrokConfigParams;
 }
 
+interface OpLoginItem {
+  website: string;
+  username: string;
+  password: string;
+}
+
+interface OpEmailAccountItem {
+  type: string;
+  server: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+async function fetch1PasswordItem(
+  title: string,
+): Promise<OpLoginItem | OpEmailAccountItem | undefined> {
+  const command = new Deno.Command("op", {
+    args: ["item", "get", "--reveal", "--format", "json", title],
+  });
+  const { stdout } = await command.output();
+  const stdoutText = new TextDecoder().decode(stdout);
+  const item = JSON.parse(stdoutText);
+
+  function field(id: string): string {
+    return item.fields.find(
+      (f: { id: string; value: string }) => f.id === id,
+    ).value;
+  }
+
+  const { category } = item;
+  if (category === "LOGIN") {
+    return {
+      website: item.urls.find((f: { primary: boolean; href: string }) =>
+        f.primary
+      ).href,
+      username: field("username"),
+      password: field("password"),
+    };
+  } else if (category === "EMAIL_ACCOUNT") {
+    return {
+      type: field("pop_type"),
+      username: field("pop_username"),
+      password: field("pop_password"),
+      server: field("pop_server"),
+      port: parseInt(field("pop_port")),
+    };
+  }
+}
+
 async function init1Password() {
   const command = new Deno.Command("op", { args: ["signin"] });
   await command.output();
 }
 
-async function fetch1PasswordCredential(
-  opSecretReferenceBase: string,
-  field: string,
-) {
-  const path = `op://${opSecretReferenceBase}/${field}`;
-  const command = new Deno.Command("op", { args: ["read", path] });
-  const { stdout } = await command.output();
-  const trimmedStdout = new TextDecoder().decode(stdout).trim();
-
-  if (trimmedStdout !== "") {
-    return trimmedStdout;
-  } else {
-    return undefined;
-  }
-}
-
 async function assignFrom1Password(
   target: Record<string, unknown>,
   opBasePath: string,
-  fields: Iterable<string> = ["username", "password", "website"],
 ): Promise<Record<string, unknown>> {
-  const promises: Promise<void>[] = [];
-  for (const field of fields) {
-    const promise = (async () => {
-      const credential = await fetch1PasswordCredential(opBasePath, field);
-      if (credential) {
-        target[field] = credential;
-      }
-    })();
-    promises.push(promise);
-  }
-
-  await Promise.all(promises);
+  const item = await fetch1PasswordItem(opBasePath);
+  Object.assign(target, item);
 
   if (!target.key) {
-    const basename = opBasePath.substring(opBasePath.indexOf("/") + 1);
-    target.key = basename.replace(/[/\\|:<>?*"]/g, "_");
+    target.key = opBasePath;
   }
 
   return target;
