@@ -96,7 +96,7 @@ async function main() {
     if (commands.includes("consolidate")) {
       await executeConsolidation(config);
       if (commands.length === 1) {
-        open(config.consolidatedPath);
+        open(config.xlsx);
       }
     }
     Deno.exit(0);

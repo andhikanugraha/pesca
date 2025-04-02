@@ -3,9 +3,7 @@ import * as XLSX from "xlsx";
 
 import type { Transaction } from "../transaction.ts";
 import getRuleMapper from "./rules.ts";
-import { getOrSet } from "./map.ts";
-import { ensureFile, expandGlob } from "@std/fs";
-import { resolve } from "@std/path/resolve";
+import { ensureFile } from "@std/fs";
 import { getTransactionMeta } from "../driver.ts";
 
 type Row = [
@@ -27,22 +25,6 @@ function toDate(plain: Temporal.PlainDate): Date {
   return new Date(zoned.epochMilliseconds);
 }
 
-type Year = string;
-function rowsByYear(
-  transactions: Transaction[],
-  mapper: Mapper,
-  overrideMap: Mapper,
-): Map<Year, Row[]> {
-  const map = new Map<Year, Row[]>();
-  for (const transaction of transactions) {
-    const key = transaction.date.year.toString();
-    const year = getOrSet(map, key, []);
-    year.push(toRow(transaction, mapper, overrideMap));
-  }
-
-  return map;
-}
-
 function applyWidths(
   sheet: XLSX.WorkSheet,
   ...widths: (number | null)[]
@@ -60,29 +42,26 @@ function applyWidths(
 }
 
 async function loadOverrideMapper(
-  baseDir: string,
+  path: string,
 ): Promise<[Mapper, Map<string, string>]> {
   const map = new Map<string, string>();
-  for await (const file of expandGlob(`${baseDir}/*.xlsx`)) {
-    const { path } = file;
-    const u8 = await Deno.readFile(path);
-    const workbook = XLSX.read(u8);
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(worksheet) as Record<
+  const u8 = await Deno.readFile(path);
+  const workbook = XLSX.read(u8);
+  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(worksheet) as Record<
+    string,
+    string | number
+  >[];
+  for (const row of rows) {
+    const { Description, Category, AutoCategory } = row as Record<
       string,
-      string | number
-    >[];
-    for (const row of rows) {
-      const { Description, Category, AutoCategory } = row as Record<
-        string,
-        string
-      >;
-      if (Category?.trim() && Category !== AutoCategory) {
-        map.set(Description, Category?.trim());
-      }
+      string
+    >;
+    if (Category?.trim() && Category !== AutoCategory) {
+      map.set(Description, Category?.trim());
     }
-    await Deno.truncate(path);
   }
+  await Deno.truncate(path);
 
   return [
     (t: Transaction) => map.get(t.description) || "",
@@ -172,23 +151,18 @@ function toRow(t: Transaction, map: Mapper, overrideMap: Mapper): Row {
   ];
 }
 
-export async function writeWorkbooksByYear(
+export async function writeWorkbooks(
   transactions: Transaction[],
   rules: string,
-  baseDir: string,
+  path: string,
 ): Promise<void> {
   const defaultMapper = getRuleMapper(rules);
-  const [overrideMapper, overrideMap] = await loadOverrideMapper(baseDir);
-  const transactionsByYear = rowsByYear(
-    transactions,
-    defaultMapper,
-    overrideMapper,
-  );
+  const [overrideMapper, overrideMap] = await loadOverrideMapper(path);
 
-  for (const [year, transactionRows] of transactionsByYear) {
-    const workbook = generateWorkbook(transactionRows, overrideMap);
-    const path = resolve(baseDir, `${year}.xlsx`);
-    await ensureFile(path);
-    await Deno.writeFile(path, workbook);
-  }
+  const transactionRows = transactions.map((t) =>
+    toRow(t, defaultMapper, overrideMapper)
+  );
+  const workbook = generateWorkbook(transactionRows, overrideMap);
+  await ensureFile(path);
+  await Deno.writeFile(path, workbook);
 }

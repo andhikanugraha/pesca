@@ -1,12 +1,12 @@
 import { expandGlob } from "@std/fs/expand-glob";
 import { relative } from "@std/path/relative";
 import { resolve } from "@std/path/resolve";
-import { ensureDir, ensureFile } from "@std/fs";
+import { ensureFile } from "@std/fs";
 import task from "tasuku";
 
 import { Transaction } from "./transaction.ts";
 import type { Config } from "../config.ts";
-import { writeWorkbooksByYear } from "./consolidate/workbook.ts";
+import { writeWorkbooks } from "./consolidate/workbook.ts";
 import { deduplicateTransactions } from "./consolidate/deduplicate.ts";
 
 function parseArtifact(artifactText: string): Transaction[] {
@@ -25,7 +25,7 @@ async function processArtifacts(paths: string[]) {
 }
 
 export async function executeConsolidation(config: Config) {
-  const { outputPath, consolidatedPath, rulesPath } = config;
+  const { outputPath, consolidatedPath, rulesPath, xlsx } = config;
   const artifacts = await Array.fromAsync(
     expandGlob(`${outputPath}/*/output.json`),
   );
@@ -34,7 +34,8 @@ export async function executeConsolidation(config: Config) {
 
   const outJsonPath = resolve(consolidatedPath, "consolidated.json");
   const outCsvPath = resolve(consolidatedPath, "consolidated.csv");
-  const outXlsxPathBase = resolve(consolidatedPath, "xlsx");
+  const outXlsxPath = resolve(consolidatedPath, xlsx);
+  console.log(outXlsxPath);
 
   // Consolidated JSON
   await task("Generating consolidated.json", async () => {
@@ -65,12 +66,12 @@ export async function executeConsolidation(config: Config) {
 
   // Consolidated XLSX
   await task("Generating consolidated.xlsx", async () => {
-    await ensureDir(outXlsxPathBase);
+    await ensureFile(outXlsxPath);
     const rules = await Deno.readTextFile(rulesPath);
-    await writeWorkbooksByYear(
+    await writeWorkbooks(
       deduplicatedTransactions,
       rules,
-      outXlsxPathBase,
+      outXlsxPath,
     );
   });
 }

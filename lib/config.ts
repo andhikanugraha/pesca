@@ -38,6 +38,7 @@ export interface Config {
   sources: SourceParams[];
   scheduler: SchedulerParams;
   rulesPath: string;
+  xlsx: string;
   pushover?: PushoverConfigParams;
   ngrok?: NgrokConfigParams;
 }
@@ -146,6 +147,7 @@ function applyDefaults(unresolvedConfig: Record<string, unknown>): Config {
     profilePath: path("profilePath", "state/profile"),
     outputPath: path("outputPath", "output"),
     consolidatedPath: path("consolidatedPath", "consolidated"),
+    xlsx: path("xlsx", "consolidated/consolidated.xlsx"),
     sources: [] as SourceParams[],
     scheduler: unresolvedConfig.scheduler || {},
     rulesPath: unresolvedConfig.rulesPath as string || "pesca.rules",
