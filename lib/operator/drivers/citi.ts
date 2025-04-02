@@ -97,11 +97,12 @@ async function processTransactionsTable(
   while (!stop && remainingAttempts > 0) {
     remainingAttempts--;
     setStatus(`Loading page ${++cursor}`);
-    await seeMoreActivity.click();
-    await page.waitForTimeout(2000);
 
     if (await noMoreTrans.isVisible()) {
       stop = true;
+    } else {
+      await seeMoreActivity.click();
+      await page.waitForTimeout(2000);
     }
 
     setStatus("Loaded page " + cursor);
