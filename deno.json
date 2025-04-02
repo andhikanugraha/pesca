@@ -7,11 +7,13 @@
     "@std/path": "jsr:@std/path@^1.0.8",
     "@std/streams": "jsr:@std/streams@^1.0.9",
     "@std/yaml": "jsr:@std/yaml@^1.0.5",
+    "@workingdevshero/deno-imap": "jsr:@workingdevshero/deno-imap@^1.0.0",
     "cheerio": "npm:cheerio@^1.0.0",
     "get-stream": "npm:get-stream@^9.0.1",
     "hono": "jsr:@hono/hono@^4.7.4",
     "open": "npm:open@^10.1.0",
     "playwright": "npm:playwright@^1.51.0",
+    "postal-mime": "npm:postal-mime@^2.4.3",
     "tasuku": "npm:tasuku@^2.0.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
   },

@@ -1,10 +1,11 @@
 import { SourceParams } from "../config.ts";
 import citi from "./drivers/citi.ts";
 import dbs from "./drivers/dbs.ts";
+import grabpay from "./drivers/grabpay.ts";
 import { DriverDefinition } from "./lib.ts";
 import type { Transaction, TransactionMeta } from "./transaction.ts";
 
-const drivers: DriverDefinition[] = [citi, dbs];
+const drivers: DriverDefinition[] = [citi, dbs, grabpay];
 const driverMap: Record<string, DriverDefinition> = {};
 for (const driver of drivers) {
   driverMap[driver.name] = driver;
