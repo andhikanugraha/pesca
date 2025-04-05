@@ -18,7 +18,6 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
   },
   "tasks": {
-    "init-actual": "cd lib/actual && npm i",
     "start": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --allow-net --allow-ffi --allow-import=\"cdn.sheetjs.com:443,jsr.io:443\" --unstable-temporal index.ts"
   },
   "compilerOptions": {

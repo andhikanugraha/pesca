@@ -1,8 +1,0 @@
-{
-  "type": "module",
-  "dependencies": {
-    "@actual-app/api": "^25.3.0",
-    "@std/streams": "npm:@jsr/std__streams@^1.0.3",
-    "tsx": "^4.19.0"
-  }
-}
