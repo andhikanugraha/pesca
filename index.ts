@@ -3,24 +3,19 @@ import { parse } from "@std/yaml";
 import open from "open";
 import { createOperator } from "./lib/operator/operator.ts";
 import startServer from "./lib/server/server.tsx";
-import task from "tasuku";
 import { createScheduler } from "./lib/scheduler/scheduler.ts";
-import { type Config, resolveConfig } from "./lib/config.ts";
+import { resolveConfig } from "./lib/config.ts";
+import { logger } from "./lib/logger.ts";
 
 async function main(pathToConfigYaml = "pesca.yml") {
   pathToConfigYaml = resolve(Deno.cwd(), pathToConfigYaml);
-  let unresolvedConfig: Record<string, unknown> = {};
 
-  await task(`Reading ${pathToConfigYaml}`, async () => {
-    const tomlString = await Deno.readTextFile(pathToConfigYaml);
-    unresolvedConfig = parse(tomlString) as Record<string, unknown>;
-  });
+  logger.info(`Reading ${pathToConfigYaml}`);
+  const yamlString = await Deno.readTextFile(pathToConfigYaml);
+  const unresolvedConfig = parse(yamlString) as Record<string, unknown>;
 
-  const config = (await task(
-    "Resolving configuration",
-    ({ task }): Promise<Config> =>
-      resolveConfig({ config: unresolvedConfig, task }),
-  )).result;
+  logger.info("Resolving configuration");
+  const config = await resolveConfig(unresolvedConfig);
 
   const operator = createOperator(config);
   const scheduler = createScheduler(
@@ -28,14 +23,22 @@ async function main(pathToConfigYaml = "pesca.yml") {
     config,
   );
 
-  if (operator) {
-    const server = await startServer({ config, scheduler, operator });
-    if (server) {
-      await open(
-        `http://${config.ngrok?.domain || `localhost:${server.addr.port}`}/`,
-      );
-    }
+  if (!operator) {
+    logger.error("Failed to init operator");
+    return;
   }
+
+  const server = await startServer({ config, scheduler, operator });
+  if (!server) {
+    logger.error("Failed to start server.");
+    return;
+  }
+
+  await open(
+    `http://${config.ngrok?.domain ?? `localhost:${server.addr.port}`}/`,
+  );
 }
 
-main(...Deno.args);
+if (import.meta.main) {
+  main(...Deno.args);
+}

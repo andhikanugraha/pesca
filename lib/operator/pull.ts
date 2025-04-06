@@ -1,196 +1,150 @@
 import { ensureFile } from "@std/fs";
-import task from "tasuku";
 
-import { DriverOutput, SourceParams, Task, Transaction } from "./lib.ts";
+import { type DriverOutput, type SourceParams } from "./lib.ts";
+import { logger } from "../logger.ts";
 
 import type { Config } from "../config.ts";
 import { withBrowserContext, type WithPage } from "./browser.ts";
 
 import { selectDriver } from "./driver.ts";
 import { generateNotifyFn, type NotifyFn } from "./pushover.ts";
+import { join } from "@std/path";
+
+function pad(n: number): string {
+  return n.toString().padStart(2, "0");
+}
 
 function getOutputBasePath({ config }: { config: Config }): string {
-  const now = Temporal.Now.plainDateTimeISO();
-  const month = now.month.toString().padStart(2, "0");
-  const day = now.day.toString().padStart(2, "0");
-  const hour = now.hour.toString().padStart(2, "0");
-  const minute = now.minute.toString().padStart(2, "0");
-  const second = now.second.toString().padStart(2, "0");
+  const now = Temporal.Now.zonedDateTimeISO();
+  const month = pad(now.month);
+  const day = pad(now.day);
+  const hour = pad(now.hour);
+  const minute = pad(now.minute);
+  const second = pad(now.second);
   const timedir = `${now.year}-${month}-${day}T${hour}.${minute}.${second}`;
 
-  const artifactBasePath = `${config.outputPath}/${timedir}`;
+  const artifactBasePath = join(config.outputPath, timedir);
 
   return artifactBasePath;
 }
 
-async function processSource({
-  source,
-  setError,
-  withPage,
-  task,
-  artifactBasePath,
-  outputs,
-  notify,
-}: {
+async function processSource({ source, withPage, artifactBasePath, notify }: {
   source: SourceParams;
-  setError: (e?: Error | string) => void;
   withPage: WithPage;
-  task: Task;
   artifactBasePath: string;
-  outputs: DriverOutput[];
   notify: NotifyFn;
-}): Promise<void> {
+}): Promise<DriverOutput | null> {
   const { key } = source;
 
   const driver = selectDriver(source);
   if (!driver) {
-    setError(`No matching driver for source: ${key}`);
-    return;
+    logger.error(`No matching driver for source: ${key}`);
+    return null;
   }
 
   async function storeArtifact(name: string, contents: string | Uint8Array) {
-    await task(
-      `Storing artifact ${name}`,
-      async () => {
-        const path = `${artifactBasePath}/${key}/${name}`;
-        await ensureFile(path);
-        if (typeof contents === "string") {
-          await Deno.writeTextFile(path, contents);
-        } else {
-          await Deno.writeFile(path, contents);
-        }
-      },
-    );
+    logger.info(`Storing artifact ${name}`);
+    const path = join(artifactBasePath, key, name);
+    await ensureFile(path);
+    if (typeof contents === "string") {
+      await Deno.writeTextFile(path, contents);
+    } else {
+      await Deno.writeFile(path, contents);
+    }
   }
+
+  const sourceNotify: NotifyFn = (
+    { message, title = key, device = source.device },
+  ) => notify({ message, title, device });
+  const childLogger = logger.child({ sourceKey: key });
+
+  const driverParams = {
+    source,
+    logger: childLogger,
+    storeArtifact,
+    notify: sourceNotify,
+  };
 
   try {
-    notify({ title: key, message: "Starting scraping...", priority: -1 });
+    let output: DriverOutput | null = null;
+    let transactionCount = 0;
+    await sourceNotify({ message: "Starting scraping...", priority: -1 });
     await withPage(async (page) => {
-      const output = await driver.pull({
-        source,
-        task,
-        page,
-        storeArtifact,
-        notify: ({ message, title = key, device = source.device }) =>
-          notify({ message, title, device }),
-      });
+      output = await driver.pull({ ...driverParams, page });
+      transactionCount = output.transactions.length;
+    });
 
-      outputs.push(output);
-      await notify({
-        title: key,
-        message:
-          `Scraping successful. Extracted ${output.transactions.length} transactions.`,
+    if (transactionCount > 0) {
+      await sourceNotify({
+        message: `Extracted ${transactionCount} transactions.`,
         priority: -1,
       });
-    });
+    }
+
+    return output;
   } catch {
-    await notify({ title: key, message: "Scraping failed." });
-    setError(`Failed processing source: ${key}`);
+    await sourceNotify({ message: "Scraping failed." });
+    logger.error(`Failed processing source: ${key}`);
   }
+
+  return null;
 }
 
-async function writeCombinedOutput(
-  { artifactBasePath, outputs }: {
-    artifactBasePath: string;
-    outputs: DriverOutput[];
-  },
-) {
-  const transactions: Transaction[] = [];
-  for (const output of outputs) {
-    transactions.push(...output.transactions);
-  }
-
-  if (transactions.length === 0) {
-    return;
-  }
-
-  transactions.sort((a, b) => (
-    // Sort in descending order
-    Temporal.PlainDate.compare(a.date, b.date)
-  ));
-
-  const path = `${artifactBasePath}/transactions.csv`;
-  await ensureFile(path);
-
-  const handle = await Deno.open(path, { write: true });
-  Transaction.toCsvStream(transactions)
-    .pipeThrough(new TextEncoderStream())
-    .pipeTo(handle.writable);
-}
-
-async function processSources({
+async function* processSources({
   config,
-  task,
   artifactBasePath,
   withPage,
 }: {
   config: Config;
-  task: Task;
   artifactBasePath: string;
   withPage: WithPage;
-}): Promise<DriverOutput[]> {
-  const outputs: DriverOutput[] = [];
+}): AsyncGenerator<DriverOutput, void, undefined> {
   const notify = generateNotifyFn(config);
-  await task.group((task) =>
-    config.sources.map((source) => {
-      return task(
-        `Processing source: ${source.key}`,
-        ({ task, setError }) =>
-          processSource({
-            source,
-            withPage,
-            task,
-            setError,
-            outputs,
-            artifactBasePath,
-            notify,
-          }),
-      );
-    })
-  );
 
-  return outputs;
+  for (const source of config.sources) {
+    logger.info(`Processing source: ${source.key}`);
+    const output = await processSource({
+      source,
+      withPage,
+      artifactBasePath,
+      notify,
+    });
+    if (output) {
+      yield output;
+    }
+  }
 }
 
-async function writeSyncPlaceholder(
+async function writeOutputJson(
   { artifactBasePath, outputs }: {
     artifactBasePath: string;
     outputs: DriverOutput[];
   },
 ) {
-  const transactions: Transaction[] = [];
-  for (const output of outputs) {
-    transactions.push(...output.transactions);
-  }
+  const transactions = outputs.flatMap((t) => t.transactions);
 
-  if (transactions.length === 0) {
-    return;
-  }
+  if (transactions.length === 0) return;
 
   transactions.sort((a, b) => Temporal.PlainDate.compare(a.date, b.date));
 
   const contentObject = { transactions };
   const contentString = JSON.stringify(contentObject, null, 2);
 
-  const file = `${artifactBasePath}/output.json`;
+  const outputJsonPath = join(artifactBasePath, "output.json");
 
-  await ensureFile(file);
-  await Deno.writeTextFile(file, contentString);
+  await ensureFile(outputJsonPath);
+  await Deno.writeTextFile(outputJsonPath, contentString);
 }
 
 export async function executePull(config: Config) {
   const { profilePath } = config;
   const artifactBasePath = getOutputBasePath({ config });
   await withBrowserContext({ profilePath }, async (withPage) => {
-    const outputs = await processSources({
-      config,
-      task,
-      artifactBasePath,
-      withPage,
-    });
-    task("Generating combined artifacts", async () => {
-      await writeCombinedOutput({ artifactBasePath, outputs });
-      await writeSyncPlaceholder({ artifactBasePath, outputs });
-    });
+    const outputs = await Array.fromAsync(
+      processSources({ config, artifactBasePath, withPage }),
+    );
+
+    logger.info("Generating combined artifact");
+    await writeOutputJson({ artifactBasePath, outputs });
   });
 }

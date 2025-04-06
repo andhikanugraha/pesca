@@ -1,22 +1,22 @@
-import type { Task } from "tasuku";
 import type { FrameLocator, Page } from "playwright";
+import { type Logger } from "pino";
 import type { SourceParams, UnresolvedSourceParams } from "../config.ts";
 import { Transaction, type TransactionMeta } from "./transaction.ts";
 import type { NotifyFn } from "./pushover.ts";
 
 export {
   type FrameLocator,
+  type Logger,
   type NotifyFn,
   type Page,
   type SourceParams,
-  type Task,
   Transaction,
   type TransactionMeta,
 };
 
 export interface ScraperParams {
   source: SourceParams;
-  task: Task;
+  logger: Logger;
   page: Page;
   storeArtifact: (name: string, contents: string | Uint8Array) => Promise<void>;
   notify: NotifyFn;
@@ -54,3 +54,4 @@ export function parseFloatSafely(
     return asFloat;
   }
 }
+

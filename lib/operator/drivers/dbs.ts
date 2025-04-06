@@ -5,6 +5,7 @@ import getStream from "get-stream";
 import {
   defineDriver,
   type FrameLocator,
+  Logger,
   type NotifyFn,
   type Page,
   parseFloatSafely,
@@ -901,37 +902,6 @@ export function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
   };
 }
 
-function parseHeader(headerRow: string[]): {
-  ref0: number;
-  ref0a: number | undefined;
-  ref1: number;
-  ref2: number;
-  ref3: number;
-  isPOSB: boolean;
-} {
-  const isPOSB = headerRow.includes("Transaction Ref1");
-
-  let ref0: number,
-    ref1: number,
-    ref2: number,
-    ref3: number,
-    ref0a: number;
-
-  if (isPOSB) {
-    ref0 = ref0a = headerRow.indexOf("Reference");
-    ref1 = headerRow.indexOf("Transaction Ref1");
-    ref2 = headerRow.indexOf("Transaction Ref2");
-    ref3 = headerRow.indexOf("Transaction Ref3");
-  } else {
-    ref0 = headerRow.indexOf("Statement Code");
-    ref0a = headerRow.indexOf("Reference");
-    ref1 = headerRow.indexOf("Client Reference");
-    ref2 = headerRow.indexOf("Additional Reference");
-    ref3 = headerRow.indexOf(" Misc Reference");
-  }
-  return { ref0, ref0a, ref1, ref2, ref3, isPOSB };
-}
-
 async function processLogin(
   { page, username, password }: {
     page: Page;
@@ -949,25 +919,25 @@ async function processLogin(
 }
 
 async function process2FA(
-  { notify, key, frame, setTitle }: {
+  { notify, key, frame, logger }: {
     notify: NotifyFn;
     key: string;
     frame: FrameLocator;
-    setTitle: (title: string) => void;
+    logger: Logger;
   },
 ) {
   await notify({
     message: `Scraping ${key}. Please open the DBS app to authenticate.`,
   });
   await frame.getByRole("link", { name: "Authenticate now" }).click();
-  setTitle("Waiting for digital token authentication...");
+  logger.info("Waiting for digital token authentication...");
 
   await frame
     .locator("#userBar")
     .getByText("View Transaction History")
     .click({ timeout: 60000 });
-  setTitle("Authenticated");
 
+  logger.info("Authenticated");
   await notify({ message: "Authentication successful." });
 }
 
@@ -988,54 +958,69 @@ async function getAccounts(frame: FrameLocator) {
   return accounts;
 }
 
-async function processAccount(
-  { frame, page, optionValue, transactions, label, storeArtifact }: {
-    frame: FrameLocator;
-    page: Page;
-    optionValue: string;
-    label: string;
-    transactions: Transaction[];
-    storeArtifact: (name: string, contents: string) => Promise<void>;
-  },
-): Promise<void> {
-  await frame.locator("#account_number_select").selectOption(optionValue);
-  await frame.locator("#currency2").selectOption("SGD");
-  await frame.locator("#transPeriod").click();
-  await frame.locator("li").filter({ hasText: "Last 6 Months" }).click();
-  await frame.getByRole("button", { name: "Go" }).click();
-  await page.waitForTimeout(1000);
-
-  async function triggerDownloadCsv() {
-    await page.waitForTimeout(1000);
-    const downloadPromise = page.waitForEvent("download");
-    await frame.getByRole("link", { name: "Download" }).click();
-    const download = await downloadPromise;
-    const downloadedString = getStream(await download.createReadStream());
-    await page.waitForTimeout(1000);
-
-    return downloadedString;
-  }
-
-  const csvStrings: string[] = [];
-  const tabs = frame.locator("#main-tabs li");
-  const tabCount = await tabs.count();
-  if (tabCount === 0) {
-    csvStrings.push(await triggerDownloadCsv());
-  } else {
-    for (let i = 0; i < tabCount; i++) {
-      const element = tabs.nth(i);
-      await element.click();
-      csvStrings.push(await triggerDownloadCsv());
-    }
-  }
-
-  for (const [index, csvString] of csvStrings.entries()) {
-    await storeArtifact(`${label} ${index}.csv`, csvString);
-    transactions.push(...parseDbsCsv(csvString));
-  }
+interface HeaderIndices {
+  ref0: number;
+  ref0a: number | undefined;
+  ref1: number;
+  ref2: number;
+  ref3: number;
+  idxCreditAmount: number;
+  idxDebitAmount: number;
 }
 
-export function parseDbsCsv(contents: string): Transaction[] {
+function parseHeader(headerRow: string[]): HeaderIndices {
+  const isPOSB = headerRow.includes("Transaction Ref1");
+
+  let ref0: number,
+    ref1: number,
+    ref2: number,
+    ref3: number,
+    ref0a: number;
+
+  if (isPOSB) {
+    ref0 = ref0a = headerRow.indexOf("Reference");
+    ref1 = headerRow.indexOf("Transaction Ref1");
+    ref2 = headerRow.indexOf("Transaction Ref2");
+    ref3 = headerRow.indexOf("Transaction Ref3");
+  } else {
+    ref0 = headerRow.indexOf("Statement Code");
+    ref0a = headerRow.indexOf("Reference");
+    ref1 = headerRow.indexOf("Client Reference");
+    ref2 = headerRow.indexOf("Additional Reference");
+    ref3 = headerRow.indexOf(" Misc Reference");
+  }
+
+  const idxCreditAmount = headerRow.indexOf("Credit Amount");
+  const idxDebitAmount = headerRow.indexOf("Debit Amount");
+
+  return { ref0, ref0a, ref1, ref2, ref3, idxCreditAmount, idxDebitAmount };
+}
+
+function buildDescription(row: string[], indices: HeaderIndices) {
+  const { ref0, ref1, ref2, ref3 } = indices;
+  const parts: string[] = [];
+  if (row[ref0] !== "ITR") parts.push(row[ref0]);
+  if (row[ref1]) parts.push(row[ref1]);
+  if (row[ref2]) parts.push(row[ref2]);
+  if (row[ref3]) parts.push(row[ref3]);
+
+  if (!parts.length) return row[ref0];
+
+  return parts.join(" ").replace(/\s+/g, " ");
+}
+
+function buildRaw(row: string[], indices: HeaderIndices): string[] {
+  const { ref0, ref0a, ref1, ref2, ref3 } = indices;
+  return [
+    row[ref0],
+    row[ref0a || ref0],
+    row[ref1],
+    row[ref2],
+    row[ref3],
+  ];
+}
+
+function* parseDbsCsv(contents: string): Generator<Transaction> {
   if (!contents.includes("Account Details For:")) {
     throw new Error("Invalid CSV");
   }
@@ -1053,32 +1038,7 @@ export function parseDbsCsv(contents: string): Transaction[] {
     throw new Error("Invalid CSV");
   }
 
-  const { ref0, ref0a, ref1, ref2, ref3 } = parseHeader(headerRow);
-
-  function buildDescription(row: string[]) {
-    const parts: string[] = [];
-    if (row[ref0] !== "ITR") parts.push(row[ref0]);
-    if (row[ref1]) parts.push(row[ref1]);
-    if (row[ref2]) parts.push(row[ref2]);
-    if (row[ref3]) parts.push(row[ref3]);
-
-    if (!parts.length) return row[ref0];
-
-    return parts.join(" ").replace(/\s+/g, " ");
-  }
-
-  function buildRaw(row: string[]): string[] {
-    return [
-      row[ref0],
-      row[ref0a || ref0],
-      row[ref1],
-      row[ref2],
-      row[ref3],
-    ];
-  }
-
-  const idxCreditAmount = headerRow.indexOf("Credit Amount");
-  const idxDebitAmount = headerRow.indexOf("Debit Amount");
+  const indices = parseHeader(headerRow);
 
   const transactions: Transaction[] = [];
   for (const cells of rows) {
@@ -1091,76 +1051,110 @@ export function parseDbsCsv(contents: string): Transaction[] {
       "Asia/Singapore",
     ).toPlainDate();
 
-    const rawRefs = buildRaw(cells);
+    const rawRefs = buildRaw(cells, indices);
 
     // parse desc
-    const description = buildDescription(cells);
+    const description = buildDescription(cells, indices);
 
     // parse amount
+    const { idxCreditAmount, idxDebitAmount } = indices;
     const creditAmount = parseFloatSafely(cells[idxCreditAmount]);
     const debitAmount = parseFloatSafely(cells[idxDebitAmount]);
     const absoluteAmount = debitAmount || creditAmount;
     const isDebit = debitAmount > 0;
 
-    transactions.unshift(
-      new Transaction(
-        account,
-        date,
-        description,
-        absoluteAmount,
-        isDebit,
-        undefined,
-        DRIVER_NAME,
-        rawRefs,
-      ),
+    yield new Transaction(
+      account,
+      date,
+      description,
+      absoluteAmount,
+      isDebit,
+      undefined,
+      DRIVER_NAME,
+      rawRefs,
     );
   }
 
   return transactions;
 }
 
+async function triggerDownloadCsv({ page, frame }: { page: Page, frame: FrameLocator }) {
+  await page.waitForTimeout(1000);
+  const downloadPromise = page.waitForEvent("download");
+  await frame.getByRole("link", { name: "Download" }).click();
+  const download = await downloadPromise;
+  const downloadedString = getStream(await download.createReadStream());
+  await page.waitForTimeout(1000);
+
+  return downloadedString;
+}
+
+async function* processAccount(
+  { frame, page, logger, storeArtifact, optionValue, label }: {
+    frame: FrameLocator;
+    page: Page;
+    logger: Logger;
+    storeArtifact: (name: string, contents: string) => Promise<void>;
+    optionValue: string;
+    label: string;
+  },
+): AsyncGenerator<Transaction> {
+  logger.info(`Processing ${label}`, { optionValue, label });
+  await frame.locator("#account_number_select").selectOption(optionValue);
+  await frame.locator("#currency2").selectOption("SGD");
+  await frame.locator("#transPeriod").click();
+  await frame.locator("li").filter({ hasText: "Last 6 Months" }).click();
+  await frame.getByRole("button", { name: "Go" }).click();
+  await page.waitForTimeout(1000);
+
+  const tabs = frame.locator("#main-tabs li");
+  const tabCount = await tabs.count();
+  if (tabCount === 0) {
+    const csvString = await triggerDownloadCsv({ page, frame });
+    await storeArtifact(`${label}.csv`, csvString);
+    yield* parseDbsCsv(csvString);
+  } else {
+    for (let i = 0; i < tabCount; i++) {
+      const element = tabs.nth(i);
+      await element.click();
+      const csvString = await triggerDownloadCsv({ page, frame });
+      await storeArtifact(`${label} ${i}.csv`, csvString);
+      yield* parseDbsCsv(csvString);
+    }
+  }
+}
+
 export default defineDriver({
   name: DRIVER_NAME,
   supportsSource: (source) => !!source.website?.includes("dbs.com.sg"),
   transactionMeta: (t) => parseRowMeta(t.raw as string[]),
-  async pull({ source, page, storeArtifact, task, notify }) {
+  async pull({ source, page, storeArtifact, logger, notify }) {
     const { username, password } = source;
     if (!username || !password) {
       throw new Error("No username/password provided.");
     }
 
-    task("Logging in", async () => {
-      await processLogin({ page, username, password });
-    });
+    logger.info("Logging in");
+    await processLogin({ page, username, password });
 
     const frame = page
       .frameLocator('frame[name="user_area"]')
       .frameLocator('iframe[name="iframe1"]');
 
-    await task("Initiating digital token prompt", async ({ setTitle }) => {
-      await process2FA({ notify, key: source.key || "", frame, setTitle });
-    });
+    logger.info("Initiating digital token prompt");
+    await process2FA({ notify, key: source.key || "", frame, logger });
 
     // iterate through options under selector, but ignore deposits (0030)
     const accounts = await getAccounts(frame);
 
     const transactions: Transaction[] = [];
-    await task.group((task) =>
-      accounts.map(([optionValue, label]) =>
-        task(
-          label,
-          () =>
-            processAccount({
-              frame,
-              page,
-              optionValue,
-              label,
-              transactions,
-              storeArtifact,
-            }),
-        )
-      )
-    );
+    const params = { frame, page, logger, storeArtifact };
+    for (const [optionValue, label] of accounts) {
+      const accountTransactions = await Array.fromAsync(
+        processAccount({ ...params, optionValue, label }),
+      );
+      transactions.push(...accountTransactions);
+    }
 
     await page.frameLocator('frame[name="user_area"]')
       .getByRole("link", { name: "Proceed to Logout" }).click();

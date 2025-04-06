@@ -1,9 +1,9 @@
-import { stringify as stringifyCsv } from "@std/csv";
-import type { Page } from "playwright";
 import * as cheerio from "cheerio";
 
 import {
   defineDriver,
+  type Logger,
+  type Page,
   parseFloatSafely,
   Transaction,
   type TransactionMeta,
@@ -36,12 +36,12 @@ async function waitOrRefresh(
 }
 
 async function processSignIn({
-  setTitle,
+  logger,
   page,
   username,
   password,
 }: {
-  setTitle: (title: string) => void;
+  logger: Logger;
   page: Page;
   username: string;
   password: string;
@@ -64,28 +64,27 @@ async function processSignIn({
   await signInButton.hover();
   await signInButton.click();
 
-  setTitle("Signed in as " + username);
+  logger.info("Signed in as " + username);
 }
 
 async function processViewAccount(
-  { page, setTitle }: { page: Page; setTitle: (title: string) => void },
+  { page, logger }: { page: Page; logger: Logger },
 ): Promise<void> {
   const locatorString = "#cmlink_AccountNameLink";
   await waitOrRefresh(page, locatorString);
 
   const accountNameLink = page.locator(locatorString);
   const accountName = await accountNameLink.innerText();
-  setTitle("Opening " + accountName);
+  logger.info("Opening " + accountName);
   await accountNameLink.hover();
   await accountNameLink.click();
 
   await page.waitForTimeout(1000);
-
-  setTitle("Opened " + accountName);
+  logger.info("Opened " + accountName);
 }
 
-async function processTransactionsTable(
-  { page, setStatus }: { page: Page; setStatus: (status: string) => void },
+async function loadFullTransactionsTable(
+  { page, logger }: { page: Page; logger: Logger },
 ) {
   await waitOrRefresh(page, "#postedTansactionTable table");
 
@@ -96,7 +95,7 @@ async function processTransactionsTable(
   let cursor = 1;
   while (!stop && remainingAttempts > 0) {
     remainingAttempts--;
-    setStatus(`Loading page ${++cursor}`);
+    logger.info(`Loading page ${++cursor}`);
 
     if (await noMoreTrans.isVisible()) {
       stop = true;
@@ -104,22 +103,68 @@ async function processTransactionsTable(
       await seeMoreActivity.click();
       await page.waitForTimeout(2000);
     }
-
-    setStatus("Loaded page " + cursor);
   }
 }
 
-function parseNumber(str: string, withCurrencyCode = true): string {
+function parseAmount(str: string, withCurrencyCode = true): number {
   // SGD 1,234.56
   if (withCurrencyCode) str = str.substring(4);
-  str = str.replace(",", "");
-  return str;
+  return parseFloatSafely(str, true);
 }
 
-interface ParsedRemarks extends TransactionMeta {
-  description: string;
+function* parseTransactionsTable(tableHTML: string): Generator<Transaction> {
+  const $ = cheerio.load(tableHTML, null, false);
+  const tbody = $("tbody");
+
+  // remove unnecessary elements
+  $("span.cA-sortText", tbody).remove();
+  $("td.cT-bodyTableColumn0", tbody).remove();
+
+  for (const tr of $("tr", tbody)) {
+    const row = $(tr);
+
+    const [
+      rawDate,
+      remarks,
+      rawDebit,
+      rawCredit,
+    ] = $("td", row).map((_, td) => $(td).text().trim());
+
+    if (!rawDate) continue;
+
+    let absoluteAmount = 0;
+    let isDebit = true;
+    if (rawDebit) {
+      isDebit = true;
+      absoluteAmount = parseAmount(rawDebit);
+    } else {
+      isDebit = false;
+      absoluteAmount = parseAmount(rawCredit);
+    }
+
+    // Parse the transaction
+    const [d, m, y] = rawDate.split("/");
+    const date = new Temporal.PlainDate(parseInt(y), parseInt(m), parseInt(d));
+
+    const maskedPAN = row.attr("class")?.match(/xxxxxxxxxxxx([0-9]{4})/)?.[0] ??
+      "";
+    const isPending = row.hasClass("pending");
+
+    const account = `Citi ` + maskedPAN.slice(-4);
+    yield new Transaction(
+      account,
+      date,
+      remarks.substring(0, 40),
+      absoluteAmount,
+      isDebit,
+      isPending,
+      "citibank.com.sg",
+      remarks,
+    );
+  }
 }
-function parseRemarks(remarks: string): ParsedRemarks {
+
+function parseRemarks(remarks: string): TransactionMeta {
   remarks = remarks?.trim() || "";
   if (remarks[0] === "*") {
     remarks = remarks.substring(1);
@@ -134,13 +179,11 @@ function parseRemarks(remarks: string): ParsedRemarks {
   for (const fee of fees) {
     if (remarks.startsWith(fee)) {
       return {
-        description: remarks,
         displayText: fee,
       };
     }
   }
 
-  const description = remarks;
   let reference: string | undefined = undefined;
   let payeeName = remarks.substring(0, 25).trimEnd();
   const payeeCity = remarks.substring(25, 38).trimEnd();
@@ -190,20 +233,15 @@ function parseRemarks(remarks: string): ParsedRemarks {
   let originalCurrencyAmount = undefined;
   if (extra.length === 3) {
     [_pan, originalCurrencyCode, originalCurrencyAmountString] = extra;
-    originalCurrencyAmount = parseFloatSafely(
-      parseNumber(originalCurrencyAmountString, false),
-    );
+    originalCurrencyAmount = parseAmount(originalCurrencyAmountString, false);
   } else if (extra.length === 2) {
     [originalCurrencyCode, originalCurrencyAmountString] = extra;
-    originalCurrencyAmount = parseFloatSafely(
-      parseNumber(originalCurrencyAmountString, false),
-    );
+    originalCurrencyAmount = parseAmount(originalCurrencyAmountString, false);
   } else {
     [_pan] = extra;
   }
 
   return {
-    description,
     payeeName,
     payeeCity,
     payeeCountryCode,
@@ -213,168 +251,46 @@ function parseRemarks(remarks: string): ParsedRemarks {
   };
 }
 
-function parseTable(
-  tableHTML: string,
-): [(string | undefined)[][], Transaction[]] {
-  const $ = cheerio.load(tableHTML, null, false);
-  const tbody = $("tbody");
-
-  // remove unnecessary elements
-  $("span.cA-sortText", tbody).remove();
-  $("td.cT-bodyTableColumn0", tbody).remove();
-
-  // remove pending rows as they are not yet settled
-  // $('tr.pending', tbody).remove();
-
-  function parseRow(tr: unknown): string[] {
-    const row = $(tr as string);
-
-    const classes = row.attr("class");
-    const maskedPAN = classes?.match(/xxxxxxxxxxxx([0-9]{4})/)?.[0] || "";
-
-    const cells: string[] = [maskedPAN];
-
-    $("td", row).each(function () {
-      cells.push($(this).text());
-    });
-
-    const pending = classes?.match(/pending/);
-    cells.push(pending ? "pending" : "");
-
-    return cells;
-  }
-
-  // CSV rows emulating a CSV download
-  const csvRows: (string | undefined)[][] = [];
-  const transactions: Transaction[] = [];
-  $("tr", tbody).each(function () {
-    const parsedRow = parseRow(this);
-    if (!parsedRow[1]) {
-      return;
-    }
-
-    const [maskedPAN, rawDate, remarks, rawDebit, rawCredit, pending] =
-      parsedRow;
-
-    const debit = "-" + parseNumber(rawDebit);
-    const credit = parseNumber(rawCredit);
-    const amountString = credit || debit;
-
-    // Parse the transaction
-    const [d, m, y] = rawDate.split("/");
-    const date = new Temporal.PlainDate(parseInt(y), parseInt(m), parseInt(d));
-
-    // parse amount
-    const amount = Math.abs(parseFloatSafely(amountString));
-    const isDebit = amountString[0] === "-";
-
-    const isPending = !!pending;
-
-    const {
-      description,
-      payeeName: merchantName,
-      payeeCity: merchantCity,
-      payeeCountryCode: merchantCountryCode,
-      originalCurrencyCode,
-      originalCurrencyAmount,
-    } = parseRemarks(remarks);
-
-    // Add CSV row emulating a CSV download
-    if (!pending) {
-      csvRows.push([
-        rawDate,
-        description,
-        amountString,
-        "",
-        maskedPAN,
-        merchantName,
-        merchantCity,
-        merchantCountryCode,
-        originalCurrencyCode,
-        originalCurrencyAmount?.toString(),
-      ]);
-    }
-
-    const account = `Citi ` + maskedPAN.substring(maskedPAN.length - 4);
-    const transaction = new Transaction(
-      account,
-      date,
-      description.substring(0, 40),
-      amount,
-      isDebit,
-      isPending,
-      "citibank.com.sg",
-      description,
-    );
-
-    transactions.unshift(transaction);
-  });
-
-  return [csvRows, transactions];
-}
-
 export default defineDriver({
   name: "citibank.com.sg",
+
   supportsSource: (source) => !!source.website?.includes("citibank.com.sg"),
+
   transactionMeta: (t) => parseRemarks(t.raw as string),
-  async pull({ task, page, source, storeArtifact }) {
+
+  async pull({ logger, page, source, storeArtifact }) {
     if (!source.username || !source.password) {
       throw new Error("No username/password specified.");
     }
 
-    const username = source.username;
-    const password = source.password;
-
-    let tableHTML: string = "";
-    let csvRows: (string | undefined)[][] = [];
-    let transactions: Transaction[] = [];
+    const { username, password } = source;
 
     const URL =
       "https://www.citibank.com.sg/SGGCB/JSO/username/signon/flow.action";
 
-    await task.group((task) => [
-      task(
-        `Opening ${URL}`,
-        () => page.goto(URL),
-      ),
-      task(
-        "Signing in as " + username,
-        ({ setTitle }) => processSignIn({ setTitle, page, username, password }),
-      ),
-      task(
-        "Opening account",
-        ({ setTitle }) => processViewAccount({ page, setTitle }),
-      ),
-      task(
-        "Expanding transactions table",
-        ({ setStatus }) => processTransactionsTable({ page, setStatus }),
-      ),
-      task(
-        "Getting table HTML",
-        async () => {
-          tableHTML = await page
-            .locator("#postedTansactionTable table")
-            .innerHTML();
+    logger.info(`Opening ${URL}`);
+    await page.goto(URL);
 
-          storeArtifact("table.html", tableHTML);
-        },
-      ),
-      task(
-        "Signing off",
-        () => page.locator("#signoff-button").click(),
-      ),
-      task(
-        "Parsing table",
-        () => {
-          [csvRows, transactions] = parseTable(tableHTML);
-          return Promise.resolve();
-        },
-      ),
-      task(
-        "Writing CSV",
-        () => storeArtifact("table.csv", stringifyCsv(csvRows)),
-      ),
-    ]);
+    logger.info("Signing in as " + username);
+    await processSignIn({ logger, page, username, password });
+
+    logger.info("Opening account");
+    await processViewAccount({ page, logger });
+
+    logger.info("Expanding transactions table");
+    await loadFullTransactionsTable({ page, logger });
+
+    logger.info("Getting table HTML");
+    const tableHTML = await page.locator("#postedTansactionTable table")
+      .innerHTML();
+    await storeArtifact("table.html", tableHTML);
+
+    logger.info("Signing off");
+    await page.locator("#signoff-button").click();
+
+    logger.info("Parsing table");
+    const transactions = [...parseTransactionsTable(tableHTML)];
+    logger.info(`Extracted ${transactions.length} transactions`);
 
     return { transactions };
   },

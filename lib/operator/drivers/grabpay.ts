@@ -6,7 +6,12 @@ import {
 import PostalMime from "postal-mime";
 import { load } from "cheerio";
 
-import { defineDriver, parseFloatSafely, Transaction } from "../lib.ts";
+import {
+  defineDriver,
+  type Logger,
+  parseFloatSafely,
+  Transaction,
+} from "../lib.ts";
 
 const DRIVER_NAME = "grabpay";
 
@@ -86,8 +91,9 @@ async function* fetchMessages(
     password: string;
   },
   mailboxName: string = "INBOX",
+  logger: Logger,
 ): AsyncGenerator<ImapMessage, void, undefined> {
-  console.log(`Connecting securely to ${account.server}:${account.port}...`);
+  logger.info(`Connecting securely to ${account.server}:${account.port}...`);
   const client = new ImapClient({
     host: account.server,
     port: account.port,
@@ -97,9 +103,9 @@ async function* fetchMessages(
   });
 
   await client.connect();
-  console.log("Secure connection successful.");
+  logger.info("Secure connection successful.");
 
-  console.log("Fetching messages...");
+  logger.info("Fetching messages...");
   const messages = await fetchAllMessages(client, mailboxName, { full: true });
 
   for (const msg of messages) {
@@ -107,7 +113,7 @@ async function* fetchMessages(
   }
 
   await client.disconnect();
-  console.log("Disconnected from IMAP server.");
+  logger.info("Disconnected from IMAP server.");
 }
 
 async function parseMessageRaw(raw: Uint8Array) {
@@ -208,7 +214,7 @@ export default defineDriver({
 
   transactionMeta: (t) => ({ payeeName: t.description }),
 
-  async pull({ source, storeArtifact }) {
+  async pull({ source, storeArtifact, logger }) {
     const messages = fetchMessages(
       source as object as {
         server: string;
@@ -217,6 +223,7 @@ export default defineDriver({
         port: number;
       },
       source.folder as string,
+      logger
     );
 
     const transactions: Transaction[] = [];

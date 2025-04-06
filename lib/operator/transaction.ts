@@ -1,5 +1,4 @@
 import { JsonValue } from "@std/json";
-import { CsvStringifyStream } from "@std/csv";
 
 export interface TransactionMeta {
   displayText?: string;
@@ -9,6 +8,18 @@ export interface TransactionMeta {
   payeeCountryCode?: string;
   originalCurrencyCode?: string;
   originalCurrencyAmount?: number;
+}
+
+interface TransactionJSON {
+  account: string;
+  date: string;
+  description: string;
+  absoluteAmount: number;
+  isDebit: boolean;
+  isPending: boolean;
+  payee: string;
+  driver?: string;
+  raw?: unknown;
 }
 
 export class Transaction {
@@ -45,7 +56,7 @@ export class Transaction {
     return (this.isDebit ? 1 : -1) * this.absoluteAmount;
   }
 
-  static from({
+  static fromJSON({
     account,
     date,
     description,
@@ -54,16 +65,7 @@ export class Transaction {
     isPending,
     driver = "",
     raw = null,
-  }: {
-    account: string;
-    date: string;
-    description: string;
-    absoluteAmount: number;
-    isDebit: boolean;
-    isPending: boolean;
-    driver?: string;
-    raw?: unknown;
-  }) {
+  }: TransactionJSON) {
     return new Transaction(
       account,
       Temporal.PlainDate.from(date),
@@ -85,28 +87,6 @@ export class Transaction {
       return value;
     }
 
-    return Transaction.from(
-      value as {
-        account: string;
-        date: string;
-        description: string;
-        absoluteAmount: number;
-        isDebit: boolean;
-        isPending: boolean;
-        payee: string;
-      },
-    );
-  }
-
-  static toCsvStream(transactions: Transaction[]): ReadableStream {
-    const source = ReadableStream.from(transactions.map((t) => [
-      t.date.toString(),
-      t.description,
-      t.amount,
-      t.account,
-      t.isPending ? "pending" : "cleared",
-    ]));
-
-    return source.pipeThrough(new CsvStringifyStream());
+    return Transaction.fromJSON(value as unknown as TransactionJSON);
   }
 }

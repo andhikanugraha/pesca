@@ -12,13 +12,15 @@
     "get-stream": "npm:get-stream@^9.0.1",
     "hono": "jsr:@hono/hono@^4.7.4",
     "open": "npm:open@^10.1.0",
+    "pino": "npm:pino@^9.6.0",
     "playwright": "npm:playwright@^1.51.0",
     "postal-mime": "npm:postal-mime@^2.4.3",
-    "tasuku": "npm:tasuku@^2.0.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
   },
+  "unstable": ["temporal"],
   "tasks": {
-    "start": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --allow-net --allow-ffi --allow-import=\"cdn.sheetjs.com:443,jsr.io:443\" --unstable-temporal index.ts"
+    "main": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --allow-net --allow-ffi --allow-import=\"cdn.sheetjs.com:443,jsr.io:443\" index.ts",
+    "start": "deno task main | deno run -A npm:pino-pretty"
   },
   "compilerOptions": {
     "jsx": "precompile",

@@ -2,12 +2,12 @@ import { Hono } from "hono";
 import { serveStatic } from "hono/deno";
 import { relative, resolve } from "@std/path";
 import { type ReactNode } from "hono/jsx";
-import task from "tasuku";
 
 import { type Scheduler } from "../scheduler/scheduler.ts";
 import { type Operator } from "../operator/operator.ts";
-import { Config } from "../config.ts";
+import { type Config } from "../config.ts";
 import { forwardServer, type NgrokConfig } from "./ngrok.ts";
+import { logger } from "../logger.ts";
 
 function serveFile(path: string) {
   const relativePath = relative(
@@ -21,7 +21,7 @@ function Layout({ children }: { children: ReactNode }) {
   return (
     <>
       <title>pesca</title>
-      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
       <link rel="stylesheet" href="/sakura.css" />
       <script src="/relative-time-element.js" type="module" />
       <script
@@ -88,13 +88,13 @@ function Time(
   );
 }
 
-export default function startServer(
+export default async function startServer(
   { config, scheduler, operator }: {
     config: Config;
     scheduler: Scheduler;
     operator: Operator;
   },
-): Deno.HttpServer<Deno.NetAddr> | null {
+): Promise<Deno.HttpServer<Deno.NetAddr> | null> {
   const app = new Hono();
 
   app.get("/sakura.css", serveFile("sakura.css"));
@@ -176,21 +176,17 @@ export default function startServer(
     return c.redirect("/");
   });
 
-  let server: Deno.HttpServer<Deno.NetAddr> | null = null;
-  task("Initiating server", async ({ setTitle, task }) => {
-    server = Deno.serve(app.fetch);
-    setTitle(`Listening to ${server.addr.hostname}:${server.addr.port}`);
-    if (server && config.ngrok) {
-      await task(
-        "Forwarding to ngrok",
-        () =>
-          forwardServer({
-            server: server as Deno.HttpServer<Deno.NetAddr>,
-            config: config.ngrok as NgrokConfig,
-          }),
-      );
+  logger.info("Initiating server");
+  const server = Deno.serve({
+    onListen({ port, hostname }) {
+      logger.info(`Listening on http://${hostname}:${port}`)
     }
-  });
+  }, app.fetch);
+
+  if (server && config.ngrok) {
+    logger.info("Forwarding to ngrok");
+    await forwardServer({ server, config: config.ngrok as NgrokConfig });
+  }
 
   return server;
 }

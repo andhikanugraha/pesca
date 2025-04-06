@@ -4,6 +4,7 @@ import { type Config } from "../config.ts";
 import { executePull } from "./pull.ts";
 import { executeConsolidation } from "./consolidate.ts";
 import open from "open";
+import { logger } from "../logger.ts";
 
 export type Operator = {
   run: (
@@ -101,7 +102,7 @@ async function main() {
     }
     Deno.exit(0);
   } catch (_e) {
-    console.error(_e);
+    logger.error(_e);
     Deno.exit(1);
   }
 }

@@ -1,8 +1,7 @@
 import { resolve } from "@std/path";
 import { ensureDir } from "@std/fs";
-import type { Config as NgrokConfig } from "@ngrok/ngrok"
-
-import type { Task } from "tasuku";
+import type { Config as NgrokConfig } from "@ngrok/ngrok";
+import { logger } from "./logger.ts";
 
 export interface SourceParams {
   key: string;
@@ -102,62 +101,47 @@ async function init1Password() {
   await command.output();
 }
 
-async function assignFrom1Password(
-  target: Record<string, unknown>,
-  opBasePath: string,
-): Promise<Record<string, unknown>> {
-  const item = await fetch1PasswordItem(opBasePath);
-  Object.assign(target, item);
+async function resolveSourceFrom1Password(
+  source: UnresolvedSourceParams,
+): Promise<SourceParams | null> {
+  if (!source.from1Password) return null;
 
-  if (!target.key) {
-    target.key = opBasePath;
+  const title = source.from1Password;
+  logger.info(`Fetching credentials from 1Password: ${title}`);
+  const item = await fetch1PasswordItem(title);
+  if (!item) {
+    logger.error(`Failed to resolve credentials from 1Password: ${title}`);
+    return null;
   }
 
-  return target;
+  logger.info(`Resolved credentials from 1Password: ${title}`);
+  return {
+    key: title,
+    ...source,
+    ...item,
+  };
 }
 
-async function resolveSources(
-  { task, config, resolvedConfig }: {
-    task: Task;
-    config: Record<string, unknown>;
-    resolvedConfig: Config;
-  },
-) {
-  const sources = config.sources as UnresolvedSourceParams[];
-
+async function* resolveSources(
+  unresolvedSources: UnresolvedSourceParams[],
+): AsyncGenerator<SourceParams, void, void> {
   await init1Password();
 
-  await task.group((task) =>
-    sources.map((source) =>
-      task(
-        `Resolving credentials: ${source.key || source.from1Password}`,
-        async ({ setTitle, setError }) => {
-          if (source.key) {
-            setTitle(`Source credentials defined: ${source.key}`);
-            resolvedConfig.sources.push({
-              key: source.key,
-              ...source,
-            });
-          } else if (source.from1Password) {
-            setTitle(
-              `Getting credentials from 1Password: ${source.from1Password}`,
-            );
-            const resolvedSource = await assignFrom1Password(
-              source,
-              source.from1Password,
-            ) as SourceParams;
-            if (resolvedSource) {
-              resolvedConfig.sources.push(resolvedSource);
-              setTitle(
-                `Resolved credentials from 1Password: ${source.from1Password}`,
-              );
-            } else {
-              setError("Failed to fetch credentials from 1Password");
-            }
-          }
-        },
-      )
-    ), { concurrency: 10 });
+  for (const source of unresolvedSources) {
+    logger.info(`Resolving credentials: ${source.key || source.from1Password}`);
+    const { key, from1Password } = source;
+
+    if (from1Password) {
+      const resolvedSource = await resolveSourceFrom1Password(source);
+
+      if (resolvedSource) {
+        yield resolvedSource;
+      }
+    } else if (key) {
+      logger.info(`Source credentials defined: ${key}`);
+      yield source as SourceParams;
+    }
+  }
 }
 
 function applyDefaults(unresolvedConfig: Record<string, unknown>): Config {
@@ -180,34 +164,24 @@ function applyDefaults(unresolvedConfig: Record<string, unknown>): Config {
   };
 }
 
-export async function resolveConfig({
-  config: unresolvedConfig,
-  task,
-}: {
-  config: Record<string, unknown>;
-  task: Task;
-}): Promise<Config> {
+export async function resolveConfig(
+  unresolvedConfig: Record<string, unknown>,
+): Promise<Config> {
   const resolvedConfig = applyDefaults(unresolvedConfig);
 
-  await task.group((task) => [
-    task(
-      "Profile path: " + resolvedConfig.profilePath,
-      () => ensureDir(resolvedConfig.profilePath),
-    ),
-    task(
-      "Output path: " + resolvedConfig.outputPath,
-      () => ensureDir(resolvedConfig.outputPath),
-    ),
-    task(
-      "Consolidated path: " + resolvedConfig.consolidatedPath,
-      () => ensureDir(resolvedConfig.consolidatedPath),
-    ),
-    task(
-      "Resolving source credentials",
-      ({ task }) =>
-        resolveSources({ task, config: unresolvedConfig, resolvedConfig }),
-    ),
-  ], { concurrency: 3 });
+  logger.info("Profile path: " + resolvedConfig.profilePath);
+  await ensureDir(resolvedConfig.profilePath);
+
+  logger.info("Output path: " + resolvedConfig.outputPath);
+  await ensureDir(resolvedConfig.outputPath);
+
+  logger.info("Consolidated path: " + resolvedConfig.consolidatedPath);
+  await ensureDir(resolvedConfig.consolidatedPath);
+
+  logger.info("Resolving source credentials");
+  resolvedConfig.sources = await Array.fromAsync(
+    resolveSources(unresolvedConfig.sources as UnresolvedSourceParams[] ?? []),
+  );
 
   return resolvedConfig;
 }
