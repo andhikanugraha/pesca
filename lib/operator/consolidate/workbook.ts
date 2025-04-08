@@ -26,80 +26,78 @@ export async function loadManualMap(
   return map;
 }
 
-type TColumn = [title: string, width?: number | null];
-type TRow = (string | number | Date | undefined)[];
+type Cell = string | number | Date | undefined;
+type CellMapper<T> = (item: T) => Cell;
+type ColumnSpec<T> = [
+  title: string,
+  mapper: CellMapper<T>,
+  width?: number | null,
+];
 
-function generateWorksheet(
-  headerSpec: TColumn[],
-  rows: TRow[],
+function generateWorksheet<T>(
+  items: T[],
+  headerSpec: ColumnSpec<T>[],
 ): XLSX.WorkSheet {
-  const header = headerSpec.flatMap((col) => col[0]);
+  const header: string[] = [];
+  const cols: XLSX.ColInfo[] = [];
+  const mappers: CellMapper<T>[] = [];
+  for (const [idx, col] of headerSpec.entries()) {
+    const [title, mapper, wch] = col;
+    header[idx] = title;
+    mappers[idx] = mapper;
+    if (wch === null) {
+      cols[idx] = { hidden: true };
+    } else if (wch !== undefined) {
+      cols[idx] = { wch };
+    }
+  }
+
+  const rows = items.map((item) => mappers.map((mapper) => mapper(item)));
 
   const sheet = XLSX.utils.aoa_to_sheet([header, ...rows], {
     cellDates: true,
     dateNF: "yyyy-mm-dd",
   });
 
-  sheet["!cols"] = headerSpec.map(([_, wch]) => {
-    if (wch === null) return { hidden: true };
-    if (wch !== undefined) return { wch };
-  }) as XLSX.ColInfo[];
-
   const numberFormat = "#,##0.00_);\\(#,##0.00\\)";
   for (const cell of Object.values(sheet) as Record<string, string>[]) {
-    if (cell.t && cell.t === "n") {
-      cell.z = numberFormat;
-    }
+    if (cell.t === "n") cell.z = numberFormat;
   }
 
-  sheet["!autofilter"] = {
-    ref: sheet["!ref"] as string,
-  };
+  sheet["!cols"] = cols;
+  sheet["!autofilter"] = { ref: sheet["!ref"]! };
 
   return sheet;
 }
 
 export function generateWorkbook(
   transactions: EnrichedTransaction[],
-  manualMap: Map<string, string>
+  manualMap: Map<string, string>,
 ): Uint8Array {
   const workbook = XLSX.utils.book_new();
 
-  const sheet1 = generateWorksheet(
+  const sheet1 = generateWorksheet(transactions, [
+    ["Account", (t) => t.account, 20],
+    ["Date", (t) => toDate(t.date), 10],
     [
-      ["Account", 20],
-      ["Date", 10],
-      ["Payee", 40],
-      ["Amount", 10],
-      ["Category", 20],
-      ["AutoCategory", null],
-      ["Description", null],
-      ["Reference", 40],
-      ["Original Currency Code", 5],
-      ["Original Currency Amount", 16],
+      "Payee",
+      (t) => t.meta.payeeName || t.meta.displayText || t.description,
+      40,
     ],
-    transactions.map((t) => [
-      t.account,
-      toDate(t.date),
-      t.meta.payeeName ?? t.meta.displayText ?? t.description,
-      t.amount,
-      t.category,
-      t.originalCategory, // this should differentiate
-      t.description,
-      t.meta.reference,
-      t.meta.originalCurrencyCode,
-      t.meta.originalCurrencyAmount,
-    ]),
-  );
+    ["Amount", (t) => t.amount, 10],
+    ["Category", (t) => t.category, 20],
+    ["AutoCategory", (t) => t.originalCategory, null],
+    ["Description", (t) => t.description, null],
+    ["Reference", (t) => t.meta.reference, 40],
+    ["Original Currency Code", (t) => t.meta.originalCurrencyCode, 5],
+    ["Original Currency Amount", (t) => t.meta.originalCurrencyAmount, 16],
+  ]);
   XLSX.utils.book_append_sheet(workbook, sheet1, "Transactions");
 
-  const sheet2 = generateWorksheet(
-    [
-      ["Payee", 40],
-      ["Category", 20]
-    ],
-    [...manualMap.entries()]
-  );
+  const sheet2 = generateWorksheet([...manualMap.entries()], [
+    ["Payee", (e) => e[0], 40],
+    ["Category", (e) => e[1], 20],
+  ]);
   XLSX.utils.book_append_sheet(workbook, sheet2, "Categorisation");
 
   return XLSX.writeXLSX(workbook, { type: "buffer", cellStyles: true });
