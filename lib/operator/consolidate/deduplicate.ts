@@ -41,7 +41,5 @@ export function deduplicateTransactions(
     }
   }
 
-  return deduplicatedTransactions.sort((a, b) =>
-    Temporal.PlainDate.compare(a.date, b.date)
-  ); // Sort by date
+  return deduplicatedTransactions.sort(Transaction.sort);
 }

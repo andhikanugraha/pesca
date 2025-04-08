@@ -1,5 +1,6 @@
 import type { FrameLocator, Page } from "playwright";
-import { type Logger } from "pino";
+import type { Logger } from "pino";
+import { ensureFile } from "@std/fs";
 import type { SourceParams, UnresolvedSourceParams } from "../config.ts";
 import { Transaction, type TransactionMeta } from "./transaction.ts";
 import type { NotifyFn } from "./pushover.ts";
@@ -55,3 +56,11 @@ export function parseFloatSafely(
   }
 }
 
+export async function writeFile(path: string, contents: string | Uint8Array) {
+  await ensureFile(path);
+  if (typeof contents === "string") {
+    await Deno.writeTextFile(path, contents);
+  } else {
+    await Deno.writeFile(path, contents);
+  }
+}

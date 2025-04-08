@@ -1,6 +1,6 @@
 import { ensureFile } from "@std/fs";
 
-import { type DriverOutput, type SourceParams } from "./lib.ts";
+import { Transaction, writeFile, type DriverOutput, type SourceParams } from "./lib.ts";
 import { logger } from "../logger.ts";
 
 import type { Config } from "../config.ts";
@@ -42,21 +42,16 @@ async function processSource({ source, withPage, artifactBasePath, notify }: {
     return null;
   }
 
+  const childLogger = logger.child({ sourceKey: key });
+
   async function storeArtifact(name: string, contents: string | Uint8Array) {
-    logger.info(`Storing artifact ${name}`);
-    const path = join(artifactBasePath, key, name);
-    await ensureFile(path);
-    if (typeof contents === "string") {
-      await Deno.writeTextFile(path, contents);
-    } else {
-      await Deno.writeFile(path, contents);
-    }
+    childLogger.info(`Storing artifact ${name}`);
+    await writeFile(join(artifactBasePath, key, name), contents);
   }
 
   const sourceNotify: NotifyFn = (
     { message, title = key, device = source.device },
   ) => notify({ message, title, device });
-  const childLogger = logger.child({ sourceKey: key });
 
   const driverParams = {
     source,
@@ -125,7 +120,7 @@ async function writeOutputJson(
 
   if (transactions.length === 0) return;
 
-  transactions.sort((a, b) => Temporal.PlainDate.compare(a.date, b.date));
+  transactions.sort(Transaction.sort);
 
   const contentObject = { transactions };
   const contentString = JSON.stringify(contentObject, null, 2);

@@ -78,6 +78,10 @@ export class Transaction {
     );
   }
 
+  static sort(a: Transaction, b: Transaction) {
+    return Temporal.PlainDate.compare(a.date, b.date);
+  }
+
   // Revive Transaction objects from JSON
   static reviver(_key: string, value: JsonValue) {
     if (
