@@ -21,9 +21,11 @@ export interface UnresolvedSourceParams extends Partial<SourceParams> {
   key?: string;
 }
 
-export interface SchedulerParams {
-  schedule?: string;
-  retryInterval?: string;
+export interface ScheduleParams {
+  daily?: string;
+  retry?: string;
+  interval?: string;
+  tz?: string;
 }
 
 export interface PushoverConfigParams {
@@ -39,7 +41,7 @@ export interface Config {
   outputPath: string;
   consolidatedPath: string;
   sources: SourceParams[];
-  scheduler: SchedulerParams;
+  schedule: ScheduleParams
   rulesPath: string;
   xlsx: string;
   pushover?: PushoverConfigParams;
@@ -145,11 +147,11 @@ async function* resolveSources(
 }
 
 function applyDefaults(unresolvedConfig: Record<string, unknown>): Config {
-  function path(prop: string, path: string) {
+  function path(prop: string, defaultPath: string) {
     if (unresolvedConfig[prop]) {
       return resolve(unresolvedConfig[prop] as string);
     }
-    return resolve(import.meta.dirname || "", "..", path);
+    return resolve(import.meta.dirname || "", "..", defaultPath);
   }
 
   return {
@@ -159,7 +161,7 @@ function applyDefaults(unresolvedConfig: Record<string, unknown>): Config {
     consolidatedPath: path("consolidatedPath", "consolidated"),
     xlsx: path("xlsx", "consolidated/consolidated.xlsx"),
     sources: [] as SourceParams[],
-    scheduler: unresolvedConfig.scheduler || {},
+    schedule: unresolvedConfig.schedule || {},
     rulesPath: unresolvedConfig.rulesPath as string || "pesca.rules",
   };
 }

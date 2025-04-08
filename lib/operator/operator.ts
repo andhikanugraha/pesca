@@ -6,15 +6,15 @@ import { executeConsolidation } from "./consolidate.ts";
 import open from "open";
 import { logger } from "../logger.ts";
 
-export type Operator = {
-  run: (
-    { commands, signal }: { commands?: Command[]; signal: AbortSignal },
-  ) => Promise<boolean>;
-  pull: ({ signal }: { signal: AbortSignal }) => Promise<boolean>;
-  consolidate: ({ signal }: { signal: AbortSignal }) => Promise<boolean>;
-};
-
 type Command = "pull" | "consolidate";
+
+export interface Operator {
+  run(
+    { commands, signal }: { commands?: Command[]; signal: AbortSignal },
+  ): Promise<boolean>;
+  pull({ signal }: { signal: AbortSignal }): Promise<boolean>;
+  consolidate({ signal }: { signal: AbortSignal }): Promise<boolean>;
+}
 
 type Payload = {
   config: Config;
@@ -84,8 +84,10 @@ export function createOperator(config: Config): Operator {
 }
 
 async function main() {
-  const stdin = Deno.stdin.readable.pipeThrough(new TextDecoderStream());
-  const stdinJson = stdin.pipeThrough(new JsonParseStream()).getReader();
+  const stdinJson = Deno.stdin.readable
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new JsonParseStream())
+    .getReader();
   const payload = await stdinJson.read();
   const { config, commands } = payload.value as object as Payload;
 
