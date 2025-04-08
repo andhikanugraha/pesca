@@ -20,7 +20,8 @@
   "unstable": ["temporal"],
   "tasks": {
     "main": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --allow-net --allow-ffi --allow-import=\"cdn.sheetjs.com:443,jsr.io:443\" index.ts",
-    "start": "deno task main | deno run -A npm:pino-pretty"
+    "pretty": "deno run -R -E npm:pino-pretty --color",
+    "start": "deno task main | deno task pretty"
   },
   "compilerOptions": {
     "jsx": "precompile",

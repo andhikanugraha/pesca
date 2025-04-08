@@ -8,6 +8,7 @@ state
 consolidated
 lab
 lab-*
+nohup.out
 
 # Logs
 logs
