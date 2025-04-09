@@ -184,6 +184,12 @@ function parseRemarks(remarks: string): TransactionMeta {
     }
   }
 
+  if (remarks.startsWith("PAYALL RENTAL      -")) {
+    return {
+      payeeName: remarks.substring(20)
+    }
+  }
+
   let reference: string | undefined = undefined;
   let payeeName = remarks.substring(0, 25).trimEnd();
   const payeeCity = remarks.substring(25, 38).trimEnd();
@@ -198,7 +204,6 @@ function parseRemarks(remarks: string): TransactionMeta {
     "SNP*",
     "OPN*",
     "FP*",
-    "PAYALL RENTAL      -",
   ];
   const toTrim = [
     "BUS/MRT",

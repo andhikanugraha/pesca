@@ -848,7 +848,8 @@ const TRANSACTION_CODES: Record<string, string> = {
 };
 
 export function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
-  r4 = r4.substring(5);
+  if (r4.startsWith("OTHR ")) r4 = r4.substring(5);
+  else r3 = `${r3} ${r4}`;
 
   let displayText;
   let payeeName = "";
@@ -1080,7 +1081,9 @@ function* parseDbsCsv(contents: string): Generator<Transaction> {
   return transactions;
 }
 
-async function triggerDownloadCsv({ page, frame }: { page: Page, frame: FrameLocator }) {
+async function triggerDownloadCsv(
+  { page, frame }: { page: Page; frame: FrameLocator },
+) {
   await page.waitForTimeout(1000);
   const downloadPromise = page.waitForEvent("download");
   await frame.getByRole("link", { name: "Download" }).click();
