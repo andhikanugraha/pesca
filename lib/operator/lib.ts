@@ -1,9 +1,10 @@
 import type { FrameLocator, Page } from "playwright";
 import type { Logger } from "pino";
-import { ensureFile } from "@std/fs";
+import { copy, ensureFile, exists } from "@std/fs";
 import type { SourceParams, UnresolvedSourceParams } from "../config.ts";
 import { Transaction, type TransactionMeta } from "./transaction.ts";
 import type { NotifyFn } from "./pushover.ts";
+import { basename, dirname, join } from "@std/path";
 
 export {
   type FrameLocator,
@@ -56,8 +57,22 @@ export function parseFloatSafely(
   }
 }
 
-export async function writeFile(path: string, contents: string | Uint8Array) {
+export async function copyForBackup(path: string) {
+  if (!await exists(path)) return;
+
+  const dir = dirname(path);
+  const base = basename(path);
+  const nowDate = Temporal.Now.plainDateISO().toString();
+  const backupPath = join(dir, "backup", `${nowDate}-${base}`);
+  await ensureFile(backupPath);
+  await copy(path, backupPath, { preserveTimestamps: true, overwrite: true });
+}
+
+export async function writeFile(path: string, contents: string | Uint8Array, backup = false) {
   await ensureFile(path);
+  if (backup) {
+    await copyForBackup(path);
+  }
   if (typeof contents === "string") {
     await Deno.writeTextFile(path, contents);
   } else {

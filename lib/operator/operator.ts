@@ -68,10 +68,16 @@ export function createOperator(config: Config): Operator {
   ): Promise<boolean> {
     try {
       const child = await spawnSelf({ config, commands }, signal);
+
+      logger.info("Spawning operator process");
       await child.output();
+
       const status = await child.status;
+      logger.debug(status);
+
       return status.success;
-    } catch (_e) {
+    } catch (error) {
+      logger.error(error);
       return false;
     }
   }
@@ -103,8 +109,8 @@ async function main() {
       }
     }
     Deno.exit(0);
-  } catch (_e) {
-    logger.error(_e);
+  } catch (error) {
+    logger.error(error);
     Deno.exit(1);
   }
 }

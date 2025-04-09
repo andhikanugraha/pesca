@@ -4,24 +4,31 @@ import { join, resolve } from "@std/path";
 import type { Config } from "../config.ts";
 import { logger } from "../logger.ts";
 import { Transaction, type TransactionMeta } from "./transaction.ts";
-import { loadManualMap, generateWorkbook } from "./consolidate/workbook.ts";
-import { deduplicateTransactions } from "./consolidate/deduplicate.ts";
+import {
+  generateWorkbook,
+  loadEdits,
+  type RowWithNotes,
+} from "./consolidate/workbook.ts";
+import {
+  type DeduplicatedTransaction,
+  deduplicateTransactions,
+} from "./consolidate/deduplicate.ts";
 import { writeFile } from "./lib.ts";
 import { getRuleMapperFromPath } from "./consolidate/rules.ts";
 import { getTransactionMeta } from "./driver.ts";
 
-export interface EnrichedTransaction extends Transaction {
+export interface EnrichedTransaction extends DeduplicatedTransaction {
   meta: TransactionMeta;
   category: string;
   originalCategory: string;
+  notes: string;
 }
 
 function applyManualMap(
   manualMap: Map<string, string>,
-  t: EnrichedTransaction,
+  meta: TransactionMeta,
   fallback: string,
 ): string {
-  const { meta } = t;
   let category = fallback;
   if (meta.payeeName && manualMap.has(meta.payeeName)) {
     category = manualMap.get(meta.payeeName) || "";
@@ -33,27 +40,30 @@ function applyManualMap(
 }
 
 export function enrichTransactions(
-  transactions: Transaction[],
+  transactions: DeduplicatedTransaction[],
   rulesMapper: (t: Transaction) => string,
   manualMap: Map<string, string>,
+  notesMap: Map<string, RowWithNotes>,
 ): EnrichedTransaction[] {
   for (const transaction of transactions) {
-    const enrichedTransaction = transaction as EnrichedTransaction; // same object
     const meta = getTransactionMeta(transaction);
-    enrichedTransaction.meta = meta;
 
     // Compute category
     let category = rulesMapper(transaction);
-    enrichedTransaction.originalCategory = category;
+    const originalCategory = category;
 
-    category = applyManualMap(manualMap, enrichedTransaction, category);
-    enrichedTransaction.category = category;
+    category = applyManualMap(manualMap, meta, category);
+    const notes = notesMap.get(transaction.id)?.notes || "";
+
+    Object.assign(transaction, { meta, category, originalCategory, notes });
   }
 
   return transactions as EnrichedTransaction[];
 }
 
-async function processArtifactsGlob(glob: string): Promise<Transaction[]> {
+async function processArtifactsGlob(
+  glob: string,
+): Promise<DeduplicatedTransaction[]> {
   const transactionsByFile = new Map<string, Transaction[]>();
   const entries = expandGlob(glob);
   for await (const entry of entries) {
@@ -73,14 +83,15 @@ export async function executeConsolidation(config: Config) {
   );
 
   const rulesMapper = await getRuleMapperFromPath(rulesPath);
-  const manualMap = await loadManualMap(xlsx);
+  const { payeeToCategory, notes } = await loadEdits(xlsx);
 
   const outJsonPath = resolve(consolidatedPath, "consolidated.json");
   const outXlsxPath = resolve(consolidatedPath, xlsx);
   const enrichedTransactions = enrichTransactions(
     deduplicatedTransactions,
     rulesMapper,
-    manualMap,
+    payeeToCategory,
+    notes,
   );
 
   // Consolidated JSON
@@ -91,11 +102,16 @@ export async function executeConsolidation(config: Config) {
     }),
     transactions: enrichedTransactions,
   };
-  await writeFile(outJsonPath, JSON.stringify(consolidatedObject, null, 2));
+  await writeFile(outJsonPath, JSON.stringify(consolidatedObject, null, 2), true);
 
   // Consolidated XLSX
   logger.info("Generating consolidated.xlsx");
-  const workbook = generateWorkbook(enrichedTransactions, manualMap);
+  const workbook = generateWorkbook(
+    enrichedTransactions,
+    payeeToCategory,
+    notes,
+  );
+  // await copyForBackup(outJsonPath);
   await Deno.truncate(outXlsxPath);
-  await writeFile(outXlsxPath, workbook);
+  await writeFile(outXlsxPath, workbook, true);
 }

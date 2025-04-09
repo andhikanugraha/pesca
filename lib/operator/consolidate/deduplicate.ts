@@ -1,21 +1,42 @@
 import { Transaction } from "../transaction.ts";
 import { getOrSet } from "./map.ts";
+import xxhash from "npm:xxhash-wasm";
 
 // type aliases to improve readability
 type FPath = string;
 type TKey = string;
 
-function getTransactionKey(t: Transaction): TKey {
-  const { date, description, account, amount, raw } = t;
-  const text = JSON.stringify(raw || description);
-  return `${account}\x1F${date.toString()}\x1F${text}\x1F${amount}`;
+export interface DeduplicatedTransaction extends Transaction {
+  id: string;
+}
+
+const { h32 } = await xxhash();
+function hash(input: string): string {
+  return h32(input).toString(16).padStart(8, "0");
+}
+
+function buildTransactionKey(t: Transaction): TKey {
+  const separator = "\x1F";
+  const { date, account, amount, raw, description } = t;
+
+  let text = "";
+  if (typeof raw === "string") text = raw;
+  else if (raw) text = JSON.stringify(raw);
+  else text = description;
+
+  const hashed = hash([account, text, amount.toString()].join(separator));
+  return `${date.toString()}-${hashed}`;
+}
+
+function buildTransactionId(transactionKey: string, index: number) {
+  return `${transactionKey}-${index.toString(16).padStart(2, "0")}`;
 }
 
 export function deduplicateTransactions(
   fileTransactionsMap: Map<FPath, Transaction[]>,
-): Transaction[] {
+): DeduplicatedTransaction[] {
   const tKeyToFile: Map<TKey, Map<FPath, Transaction[]>> = new Map();
-  const deduplicatedTransactions: Transaction[] = [];
+  const deduplicatedTransactions: DeduplicatedTransaction[] = []; 
 
   for (const [filePath, transactions] of fileTransactionsMap) {
     const clearedTransactions = transactions.filter((t) => !t.isPending);
@@ -23,21 +44,23 @@ export function deduplicateTransactions(
       if (transaction.description[0] === "*") {
         transaction.description = transaction.description.substring(1);
       }
-      const transactionKey = getTransactionKey(transaction);
+      const transactionKey = buildTransactionKey(transaction);
       const fileToUniqTrx = getOrSet(tKeyToFile, transactionKey, new Map());
       const transactionsInThisFile = getOrSet(fileToUniqTrx, filePath, []);
       transactionsInThisFile.push(transaction);
     }
   }
 
-  for (const [_, fileToUniqTrx] of tKeyToFile) {
+  for (const [transactionKey, fileToUniqTrx] of tKeyToFile) {
     let latestFilePath = "";
     for (const filePath of fileToUniqTrx.keys()) {
       if (filePath > latestFilePath) latestFilePath = filePath;
     }
-    const list = fileToUniqTrx.get(latestFilePath) as Transaction[];
-    for (const transaction of list) {
-      deduplicatedTransactions.push(transaction);
+    const list = fileToUniqTrx.get(latestFilePath)!;
+    for (const [idx, transaction] of list.entries()) {
+      const id = buildTransactionId(transactionKey, idx);
+      const enriched = Object.assign(transaction, { id });
+      deduplicatedTransactions.push(enriched);
     }
   }
 
