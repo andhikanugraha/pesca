@@ -17,13 +17,7 @@ function hash(input: string): string {
 
 function buildTransactionKey(t: Transaction): TKey {
   const { date, account, amount, raw, description } = t;
-
-  let text = "";
-  if (typeof raw === "string") text = raw;
-  else if (raw) text = JSON.stringify(raw);
-  else text = description;
-
-  const hashed = hash(JSON.stringify([account, text, amount.toString()]));
+  const hashed = hash(JSON.stringify([account, raw || description, amount.toString()]));
   return `${date.toString()}-${hashed}`;
 }
 
