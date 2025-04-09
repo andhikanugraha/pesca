@@ -860,6 +860,8 @@ export function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
     payeeName = r3;
   } else if (r0 === "POS" && r1 === "NETS") {
     payeeName = r3;
+  } else if (r0 === "MST") {
+    payeeName = r2;
   } else if (
     (r1 === "POS" && r2.startsWith("NETS ")) ||
     (r1 === "ICT" && r2.startsWith("Incoming PayNow Ref ")) ||
