@@ -125,11 +125,11 @@ export function generateWorkbook(
     ["Payee", (t) => payeeCellValue(t), 32],
     ["Amount", (t) => t.amount, 10],
     ["Category", (t) => t.category, 14],
+    ["Notes", (t) => t.notes, 30],
+    ["ID", (t) => t.id, null],
     ["AutoCategory", (t) => t.originalCategory, null],
     ["Description", (t) => t.description, null],
     ["Reference", (t) => t.meta.reference, 40],
-    ["ID", (t) => t.id, null],
-    ["Notes", (t) => t.notes, 30],
     ["Original Currency Code", (t) => t.meta.originalCurrencyCode, 5],
     ["Original Currency Amount", (t) => t.meta.originalCurrencyAmount, 16],
   ]);
