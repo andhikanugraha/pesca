@@ -848,61 +848,87 @@ const TRANSACTION_CODES: Record<string, string> = {
 };
 
 export function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
-  if (r4.startsWith("OTHR ")) r4 = r4.substring(5);
-  else r3 = `${r3} ${r4}`;
+  const r4othr = r4.startsWith("OTHR ");
+  if (r4othr) r4 = r4.substring(5);
+
+  // Indicates that this was done through digibank. Not useful.
+  r2 = r2.replace(/ *: *I-BANK/, "");
 
   let displayText;
   let payeeName = "";
   let reference = "";
 
   if (r0 === "ITR" || r0 === "ATINT") {
-    displayText = "Interest";
-  } else if (r2.startsWith("TOP-UP TO PAYLAH! :")) {
-    payeeName = r3;
-  } else if (r0 === "POS" && r1 === "NETS") {
-    payeeName = r3;
-  } else if (r0 === "MST") {
-    payeeName = r2;
-  } else if (
+    return { displayText: "Interest " };
+  }
+
+  if (r2.startsWith("TOP-UP TO PAYLAH! :")) {
+    return { payeeName: r3 };
+  }
+
+  if (r0 === "POS" && r1 === "NETS") {
+    return { payeeName: r3 };
+  }
+
+  if (r0 === "MST") {
+    return { payeeName: r2 };
+  }
+
+  if (
     (r1 === "POS" && r2.startsWith("NETS ")) ||
     (r1 === "ICT" && r2.startsWith("Incoming PayNow Ref ")) ||
     (r1 === "ICT" && r2.startsWith("PayNow Transfer "))
   ) {
     payeeName = r3?.substring(r3.indexOf(":") + 2);
+    if (!r4othr) payeeName += " " + r4;
     if (r4 && r4 !== "PayNow Transfer") reference = r4;
-  } else if (
-    (r0 === "ADV" && r1 === "ICT" && r3 === "Transfer") // FAST transfer
-  ) {
+    return { payeeName, reference };
+  }
+
+  // FAST transfer
+  if (r0 === "ADV" && r1 === "ICT" && r3 === "Transfer") {
     payeeName = r2.replace("CSL:", "").replace(":I-BANK", "");
     reference = r4;
-  } else if (
-    (r0 === "ADV" && r1 === "TRF")
-  ) {
-    payeeName = r2.replace(" : I-BANK", "");
+    return { payeeName, reference };
+  }
+
+  if ((r0 === "ADV" && r1 === "TRF")) {
+    payeeName = r2;
     reference = r3;
-  } else if (r0 === "ADV" && r1 === "IDT") {
+    return { payeeName, reference };
+  }
+
+  if ((r0 === "ADV" && r1 === "BILL")) {
+    payeeName = r2;
+    reference = r3;
+    return { payeeName, reference };
+  }
+
+  if (r0 === "ADV" && r1 === "IDT") {
     reference = `${r2} ${r3}`;
     if (r3.startsWith("TW")) {
       payeeName = "WISE";
     } else {
       payeeName = r3;
     }
-  } else if (r0 === "ADV") {
-    displayText = TRANSACTION_CODES[r1];
-    reference = `${r2} ${r3}`;
-  } else if (r0 === "GR" || r0 === "POS") {
-    payeeName = r2;
-  } else if (!r2 && TRANSACTION_CODES[r0]) {
-    displayText = TRANSACTION_CODES[r0];
-  } else {
-    displayText = `${r2} ${r3}`;
+    return { payeeName, reference };
   }
 
-  return {
-    displayText,
-    payeeName,
-    reference,
-  };
+  if (r0 === "ADV") {
+    displayText = TRANSACTION_CODES[r1];
+    reference = `${r2} ${r3}`;
+    return { displayText, reference };
+  }
+
+  if (r0 === "GR" || r0 === "POS") {
+    return { payeeName: r2 };
+  }
+
+  if (!r2 && TRANSACTION_CODES[r0]) {
+    return { displayText: TRANSACTION_CODES[r0] };
+  }
+
+  return { displayText: `${r2} ${r3}` };
 }
 
 async function processLogin(
