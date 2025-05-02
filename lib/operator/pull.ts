@@ -1,10 +1,15 @@
 import { ensureFile } from "@std/fs";
 
-import { Transaction, writeFile, type DriverOutput, type SourceParams } from "./lib.ts";
+import {
+  type DriverOutput,
+  type SourceParams,
+  Transaction,
+  writeFile,
+} from "./lib.ts";
 import { logger } from "../logger.ts";
 
 import type { Config } from "../config.ts";
-import { withBrowserContext, type WithPage } from "./browser.ts";
+import { createBrowserContext, type DisposablePage } from "./browser.ts";
 
 import { selectDriver } from "./driver.ts";
 import { generateNotifyFn, type NotifyFn } from "./pushover.ts";
@@ -28,9 +33,9 @@ function getOutputBasePath({ config }: { config: Config }): string {
   return artifactBasePath;
 }
 
-async function processSource({ source, withPage, artifactBasePath, notify }: {
+async function processSource({ source, createPage, artifactBasePath, notify }: {
   source: SourceParams;
-  withPage: WithPage;
+  createPage: () => Promise<DisposablePage>;
   artifactBasePath: string;
   notify: NotifyFn;
 }): Promise<DriverOutput | null> {
@@ -64,10 +69,8 @@ async function processSource({ source, withPage, artifactBasePath, notify }: {
     let output: DriverOutput | null = null;
     let transactionCount = 0;
     await sourceNotify({ message: "Starting scraping...", priority: -1 });
-    await withPage(async (page) => {
-      output = await driver.pull({ ...driverParams, page });
-      transactionCount = output.transactions.length;
-    });
+    output = await driver.pull({ ...driverParams, createPage });
+    transactionCount = output.transactions.length;
 
     if (transactionCount > 0) {
       await sourceNotify({
@@ -88,19 +91,19 @@ async function processSource({ source, withPage, artifactBasePath, notify }: {
 async function* processSources({
   config,
   artifactBasePath,
-  withPage,
+  createPage,
 }: {
   config: Config;
   artifactBasePath: string;
-  withPage: WithPage;
-}): AsyncGenerator<DriverOutput, void, undefined> {
+  createPage: () => Promise<DisposablePage>;
+}): AsyncGenerator<DriverOutput> {
   const notify = generateNotifyFn(config);
 
   for (const source of config.sources) {
     logger.info(`Processing source: ${source.key}`);
     const output = await processSource({
       source,
-      withPage,
+      createPage,
       artifactBasePath,
       notify,
     });
@@ -134,12 +137,16 @@ async function writeOutputJson(
 export async function executePull(config: Config) {
   const { profilePath } = config;
   const artifactBasePath = getOutputBasePath({ config });
-  await withBrowserContext({ profilePath }, async (withPage) => {
-    const outputs = await Array.fromAsync(
-      processSources({ config, artifactBasePath, withPage }),
-    );
 
-    logger.info("Generating combined artifact");
-    await writeOutputJson({ artifactBasePath, outputs });
-  });
+  await using context = createBrowserContext({ profilePath });
+
+  const outputs = await Array.fromAsync(
+    processSources({
+      config,
+      artifactBasePath,
+      createPage: () => context.createPage(),
+    }),
+  );
+  logger.info("Generating combined artifact");
+  await writeOutputJson({ artifactBasePath, outputs });
 }

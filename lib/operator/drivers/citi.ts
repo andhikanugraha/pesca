@@ -263,7 +263,7 @@ export default defineDriver({
 
   transactionMeta: (t) => parseRemarks(t.raw as string),
 
-  async pull({ logger, page, source, storeArtifact }) {
+  async pull({ logger, createPage, source, storeArtifact }) {
     if (!source.username || !source.password) {
       throw new Error("No username/password specified.");
     }
@@ -272,6 +272,8 @@ export default defineDriver({
 
     const URL =
       "https://www.citibank.com.sg/SGGCB/JSO/username/signon/flow.action";
+
+    await using page = await createPage();
 
     logger.info(`Opening ${URL}`);
     await page.goto(URL);

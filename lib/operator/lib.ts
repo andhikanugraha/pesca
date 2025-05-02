@@ -5,8 +5,10 @@ import type { SourceParams, UnresolvedSourceParams } from "../config.ts";
 import { Transaction, type TransactionMeta } from "./transaction.ts";
 import type { NotifyFn } from "./pushover.ts";
 import { basename, dirname, join } from "@std/path";
+import type { DisposablePage } from "./browser.ts";
 
 export {
+  type DisposablePage,
   type FrameLocator,
   type Logger,
   type NotifyFn,
@@ -19,7 +21,7 @@ export {
 export interface ScraperParams {
   source: SourceParams;
   logger: Logger;
-  page: Page;
+  createPage: () => Promise<DisposablePage>;
   storeArtifact: (name: string, contents: string | Uint8Array) => Promise<void>;
   notify: NotifyFn;
 }
@@ -68,7 +70,11 @@ export async function copyForBackup(path: string) {
   await copy(path, backupPath, { preserveTimestamps: true, overwrite: true });
 }
 
-export async function writeFile(path: string, contents: string | Uint8Array, backup = false) {
+export async function writeFile(
+  path: string,
+  contents: string | Uint8Array,
+  backup = false,
+) {
   await ensureFile(path);
   if (backup) {
     await copyForBackup(path);

@@ -1159,11 +1159,13 @@ export default defineDriver({
   name: DRIVER_NAME,
   supportsSource: (source) => !!source.website?.includes("dbs.com.sg"),
   transactionMeta: (t) => parseRowMeta(t.raw as string[]),
-  async pull({ source, page, storeArtifact, logger, notify }) {
+  async pull({ source, createPage, storeArtifact, logger, notify }) {
     const { username, password } = source;
     if (!username || !password) {
       throw new Error("No username/password provided.");
     }
+
+    await using page = await createPage();
 
     logger.info("Logging in");
     await processLogin({ page, username, password });

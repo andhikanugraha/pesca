@@ -1,7 +1,4 @@
-import { chromium, type Page } from "playwright";
-
-export type WithPage = (ffn: (page: Page) => Promise<void>) => Promise<void>;
-export type FunctionWithPage = (withPage: WithPage) => Promise<void>;
+import { type BrowserContext, chromium, type Page } from "playwright";
 
 function hideApp(appName: string) {
   const scpt = `
@@ -18,11 +15,12 @@ function hideApp(appName: string) {
   }
 }
 
-export async function withBrowserContext(
-  { profilePath }: { profilePath: string },
-  fn: FunctionWithPage,
-): Promise<void> {
-  const context = await chromium.launchPersistentContext(profilePath, {
+export interface DisposablePage extends Page {
+  [Symbol.asyncDispose](): Promise<void>;
+}
+
+function launchPersistentContext(profilePath: string): Promise<BrowserContext> {
+  return chromium.launchPersistentContext(profilePath, {
     channel: "chrome",
     headless: false,
     args: [
@@ -31,18 +29,22 @@ export async function withBrowserContext(
     ],
     ignoreDefaultArgs: ["--enable-automation"],
   });
+}
 
-  const results = await fn(async function withPage(
-    ffn: (page: Page) => Promise<void>,
-  ) {
-    const page = await context.newPage();
-    hideApp("Google Chrome");
-    await ffn(page);
-    await page.close();
-  });
-
-  // Gracefully close
-  await context.close();
-
-  return results;
+export function createBrowserContext(
+  { profilePath }: { profilePath: string },
+) {
+  let context: BrowserContext | null;
+  return {
+    async createPage() {
+      if (!context) context = await launchPersistentContext(profilePath);
+      const page = await context.newPage();
+      hideApp("Google Chrome");
+      page[Symbol.asyncDispose] = () => page.close();
+      return page as DisposablePage;
+    },
+    async [Symbol.asyncDispose]() {
+      if (context) await context.close();
+    },
+  };
 }
