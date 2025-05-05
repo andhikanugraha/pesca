@@ -55,8 +55,8 @@ export function* enrichTransactions(
     category = applyManualMap(manualMap, meta, category);
     const notes = notesMap.get(transaction.id)?.notes || "";
 
-    Object.assign(transaction, { meta, category, originalCategory, notes });
-    yield transaction as EnrichedTransaction;
+    const enriched = Object.assign(transaction, { meta, category, originalCategory, notes });
+    yield enriched;
   }
 }
 
@@ -82,10 +82,11 @@ export async function executeConsolidation(config: Config) {
   );
 
   const rulesMapper = await getRuleMapperFromPath(rulesPath);
-  const { payeeToCategory, notes } = await loadEdits(xlsx);
+
+  const xlsxPath = resolve(consolidatedPath, xlsx);
+  const { payeeToCategory, notes } = await loadEdits(xlsxPath);
 
   const outJsonPath = resolve(consolidatedPath, "consolidated.json");
-  const outXlsxPath = resolve(consolidatedPath, xlsx);
   const enrichedTransactions = enrichTransactions(
     deduplicatedTransactions,
     rulesMapper,
@@ -112,7 +113,7 @@ export async function executeConsolidation(config: Config) {
     payeeToCategory,
     notes,
   );
-  // await copyForBackup(outJsonPath);
-  await Deno.truncate(outXlsxPath);
-  await writeFile(outXlsxPath, workbook, true);
+
+  await Deno.truncate(xlsxPath);
+  await writeFile(xlsxPath, workbook, true);
 }
