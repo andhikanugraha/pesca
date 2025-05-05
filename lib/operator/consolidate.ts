@@ -39,12 +39,12 @@ function applyManualMap(
   return category;
 }
 
-export function enrichTransactions(
-  transactions: DeduplicatedTransaction[],
+export function* enrichTransactions(
+  transactions: Iterable<DeduplicatedTransaction>,
   rulesMapper: (t: Transaction) => string,
   manualMap: Map<string, string>,
   notesMap: Map<string, RowWithNotes>,
-): EnrichedTransaction[] {
+): Generator<EnrichedTransaction> {
   for (const transaction of transactions) {
     const meta = getTransactionMeta(transaction);
 
@@ -56,14 +56,13 @@ export function enrichTransactions(
     const notes = notesMap.get(transaction.id)?.notes || "";
 
     Object.assign(transaction, { meta, category, originalCategory, notes });
+    yield transaction as EnrichedTransaction;
   }
-
-  return transactions as EnrichedTransaction[];
 }
 
 async function processArtifactsGlob(
   glob: string,
-): Promise<DeduplicatedTransaction[]> {
+): Promise<Iterable<DeduplicatedTransaction>> {
   const transactionsByFile = new Map<string, Transaction[]>();
   const entries = expandGlob(glob);
   for await (const entry of entries) {
@@ -94,20 +93,22 @@ export async function executeConsolidation(config: Config) {
     notes,
   );
 
+  const transactions = [...enrichedTransactions].sort(Transaction.sort);
+
   // Consolidated JSON
   logger.info("Generating consolidated.json");
   const consolidatedObject = {
     updatedAt: Temporal.Now.zonedDateTimeISO().toString({
       timeZoneName: "never",
     }),
-    transactions: enrichedTransactions,
+    transactions,
   };
   await writeFile(outJsonPath, JSON.stringify(consolidatedObject, null, 2), true);
 
   // Consolidated XLSX
   logger.info("Generating consolidated.xlsx");
   const workbook = generateWorkbook(
-    enrichedTransactions,
+    transactions,
     payeeToCategory,
     notes,
   );

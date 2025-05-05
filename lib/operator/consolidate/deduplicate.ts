@@ -17,7 +17,7 @@ function hash(input: string): string {
 
 function buildTransactionKey(t: Transaction): TKey {
   const { date, account, amount, raw, description } = t;
-  const hashed = hash(JSON.stringify([account, raw || description, amount.toString()]));
+  const hashed = hash(JSON.stringify([account, raw || description, amount]));
   return `${date.toString()}-${hashed}`;
 }
 
@@ -25,11 +25,10 @@ function buildTransactionId(transactionKey: string, index: number) {
   return `${transactionKey}-${index.toString(16).padStart(2, "0")}`;
 }
 
-export function deduplicateTransactions(
+export function* deduplicateTransactions(
   fileTransactionsMap: Map<FPath, Transaction[]>,
-): DeduplicatedTransaction[] {
+): Generator<DeduplicatedTransaction> {
   const tKeyToFile: Map<TKey, Map<FPath, Transaction[]>> = new Map();
-  const deduplicatedTransactions: DeduplicatedTransaction[] = []; 
 
   for (const [filePath, transactions] of fileTransactionsMap) {
     const clearedTransactions = transactions.filter((t) => !t.isPending);
@@ -53,9 +52,7 @@ export function deduplicateTransactions(
     for (const [idx, transaction] of list.entries()) {
       const id = buildTransactionId(transactionKey, idx);
       const enriched = Object.assign(transaction, { id });
-      deduplicatedTransactions.push(enriched);
+      yield enriched;
     }
   }
-
-  return deduplicatedTransactions.sort(Transaction.sort);
 }
