@@ -125,7 +125,7 @@ function* parseTransactionsTable(tableHTML: string): Generator<Transaction> {
 
     const [
       rawDate,
-      remarks,
+      rawRemarks,
       rawDebit,
       rawCredit,
     ] = $("td", row).map((_, td) => $(td).text().trim());
@@ -149,6 +149,12 @@ function* parseTransactionsTable(tableHTML: string): Generator<Transaction> {
     const maskedPAN = row.attr("class")?.match(/xxxxxxxxxxxx([0-9]{4})/)?.[0] ??
       "";
     const isPending = row.hasClass("pending");
+
+    let remarks = rawRemarks;
+    // Pending transactions are prefixed with an asterisk. This should be omitted.
+    if (remarks[0] === "*") {
+      remarks = rawRemarks.substring(1);
+    }
 
     const account = `Citi ` + maskedPAN.slice(-4);
     yield new Transaction(
