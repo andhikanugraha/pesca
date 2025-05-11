@@ -1,6 +1,6 @@
 {
   "imports": {
-    "@ngrok/ngrok": "npm:@ngrok/ngrok@^1.4.1",
+    "@ngrok/ngrok": "npm:@ngrok/ngrok@^1.5.1",
     "@std/csv": "jsr:@std/csv@^1.0.5",
     "@std/fs": "jsr:@std/fs@^1.0.14",
     "@std/json": "jsr:@std/json@^1.0.1",
@@ -11,9 +11,9 @@
     "cheerio": "npm:cheerio@^1.0.0",
     "get-stream": "npm:get-stream@^9.0.1",
     "hono": "jsr:@hono/hono@^4.7.4",
-    "open": "npm:open@^10.1.0",
+    "open": "npm:open@^10.1.2",
     "pino": "npm:pino@^9.6.0",
-    "playwright": "npm:playwright@^1.51.0",
+    "playwright": "npm:playwright@^1.52.0",
     "postal-mime": "npm:postal-mime@^2.4.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
   },
