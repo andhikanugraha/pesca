@@ -25,17 +25,14 @@ function buildTransactionId(transactionKey: string, index: number) {
   return `${transactionKey}-${index.toString(16).padStart(2, "0")}`;
 }
 
-export function* deduplicateTransactions(
-  fileTransactionsMap: Map<FPath, Transaction[]>,
-): Generator<DeduplicatedTransaction> {
+export async function* deduplicateTransactions(
+  fileTransactionsMap: Map<FPath, AsyncIterable<Transaction> | Iterable<Transaction>>,
+): AsyncGenerator<DeduplicatedTransaction> {
   const tKeyToFile: Map<TKey, Map<FPath, Transaction[]>> = new Map();
 
   for (const [filePath, transactions] of fileTransactionsMap) {
-    const clearedTransactions = transactions.filter((t) => !t.isPending);
-    for (const transaction of clearedTransactions) {
-      if (transaction.description[0] === "*") {
-        transaction.description = transaction.description.substring(1);
-      }
+    for await (const transaction of transactions) {
+      if (transaction.isPending) continue;
       const transactionKey = buildTransactionKey(transaction);
       const fileToUniqTrx = getOrSet(tKeyToFile, transactionKey, new Map());
       const transactionsInThisFile = getOrSet(fileToUniqTrx, filePath, []);

@@ -1,5 +1,5 @@
-import { expandGlob } from "@std/fs";
-import { join, resolve } from "@std/path";
+import { exists, expandGlob } from "@std/fs";
+import { join, relative, resolve } from "@std/path";
 
 import type { Config } from "../config.ts";
 import { logger } from "../logger.ts";
@@ -15,7 +15,7 @@ import {
 } from "./consolidate/deduplicate.ts";
 import { writeFile } from "./lib.ts";
 import { getRuleMapperFromPath } from "./consolidate/rules.ts";
-import { getTransactionMeta } from "./driver.ts";
+import { getTransactionMeta, selectDriver } from "./driver.ts";
 
 export interface EnrichedTransaction extends DeduplicatedTransaction {
   meta: TransactionMeta;
@@ -39,13 +39,13 @@ function applyManualMap(
   return category;
 }
 
-export function* enrichTransactions(
-  transactions: Iterable<DeduplicatedTransaction>,
+export async function* enrichTransactions(
+  transactions: AsyncIterable<DeduplicatedTransaction>,
   rulesMapper: (t: Transaction) => string,
   manualMap: Map<string, string>,
   notesMap: Map<string, RowWithNotes>,
-): Generator<EnrichedTransaction> {
-  for (const transaction of transactions) {
+): AsyncGenerator<EnrichedTransaction> {
+  for await (const transaction of transactions) {
     const meta = getTransactionMeta(transaction);
 
     // Compute category
@@ -55,31 +55,67 @@ export function* enrichTransactions(
     category = applyManualMap(manualMap, meta, category);
     const notes = notesMap.get(transaction.id)?.notes || "";
 
-    const enriched = Object.assign(transaction, { meta, category, originalCategory, notes });
+    const enriched = Object.assign(transaction, {
+      meta,
+      category,
+      originalCategory,
+      notes,
+    });
     yield enriched;
   }
 }
 
-async function processArtifactsGlob(
-  glob: string,
-): Promise<Iterable<DeduplicatedTransaction>> {
-  const transactionsByFile = new Map<string, Transaction[]>();
-  const entries = expandGlob(glob);
-  for await (const entry of entries) {
-    const { path } = entry;
-    const artifactText = await Deno.readTextFile(path);
-    const { transactions } = JSON.parse(artifactText, Transaction.reviver);
-    transactionsByFile.set(path, transactions);
+export async function* loadArtifactFiles(parentPath: string) {
+  for await (
+    const entry of expandGlob(join(parentPath, "**"), { includeDirs: false })
+  ) {
+    if (entry.name.startsWith(".")) continue;
+
+    const name = relative(parentPath, entry.path);
+    using file = await Deno.open(entry.path);
+    yield { name, readable: file.readable };
+  }
+}
+
+export async function* parseJobArtifacts(
+  { sources, outputPath }: Config,
+  jobDirName: string,
+): AsyncGenerator<Transaction> {
+  logger.info(`Parsing artifacts in ${jobDirName}`);
+  for (const source of sources) {
+    const sourcePath = join(outputPath, jobDirName, source.key);
+    if (!await exists(sourcePath, { isDirectory: true })) {
+      logger.warn(
+        `Source path does not exist: ${relative(outputPath, sourcePath)}`,
+      );
+      continue;
+    }
+
+    const driver = selectDriver(source);
+    if (!driver || !driver.parseArtifacts) {
+      continue;
+    }
+
+    yield* driver.parseArtifacts(
+      { source, logger },
+      loadArtifactFiles(sourcePath),
+    );
+  }
+}
+
+export async function* processAllArtifacts(config: Config) {
+  const transactionsByFile = new Map<string, AsyncIterable<Transaction>>();
+  for await (const entry of Deno.readDir(config.outputPath)) {
+    if (!entry.isDirectory) continue;
+    const transactions = parseJobArtifacts(config, entry.name);
+    transactionsByFile.set(entry.name, transactions);
   }
 
-  return deduplicateTransactions(transactionsByFile);
+  yield* deduplicateTransactions(transactionsByFile);
 }
 
 export async function executeConsolidation(config: Config) {
-  const { rulesPath, outputPath, consolidatedPath, xlsx } = config;
-  const deduplicatedTransactions = await processArtifactsGlob(
-    join(outputPath, "*", "output.json"),
-  );
+  const { rulesPath, consolidatedPath, xlsx } = config;
 
   const rulesMapper = await getRuleMapperFromPath(rulesPath);
 
@@ -88,13 +124,14 @@ export async function executeConsolidation(config: Config) {
 
   const outJsonPath = resolve(consolidatedPath, "consolidated.json");
   const enrichedTransactions = enrichTransactions(
-    deduplicatedTransactions,
+    processAllArtifacts(config),
     rulesMapper,
     payeeToCategory,
     notes,
   );
 
-  const transactions = [...enrichedTransactions].sort(Transaction.sort);
+  const transactions = (await Array.fromAsync(enrichedTransactions))
+    .sort(Transaction.sort);
 
   // Consolidated JSON
   logger.info("Generating consolidated.json");
@@ -104,7 +141,11 @@ export async function executeConsolidation(config: Config) {
     }),
     transactions,
   };
-  await writeFile(outJsonPath, JSON.stringify(consolidatedObject, null, 2), true);
+  await writeFile(
+    outJsonPath,
+    JSON.stringify(consolidatedObject, null, 2),
+    true,
+  );
 
   // Consolidated XLSX
   logger.info("Generating consolidated.xlsx");

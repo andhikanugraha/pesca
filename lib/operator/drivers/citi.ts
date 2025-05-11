@@ -112,8 +112,30 @@ function parseAmount(str: string, withCurrencyCode = true): number {
   return parseFloatSafely(str, true);
 }
 
-function* parseTransactionsTable(tableHTML: string): Generator<Transaction> {
-  const $ = cheerio.load(tableHTML, null, false);
+async function cheerioWrappedStream(
+  readable: ReadableStream<Uint8Array>,
+): Promise<cheerio.CheerioAPI> {
+  const te = new TextEncoder();
+  const { promise, resolve, reject } = Promise.withResolvers<cheerio.CheerioAPI>();
+  const stream = cheerio.decodeStream({}, (err, $) => {
+    if (err) return reject(err);
+    resolve($);
+  });
+
+  stream.write(te.encode("<table>"));
+  for await (const chunk of readable) {
+    stream.write(chunk);
+  }
+  stream.write(te.encode("</table>"));
+  stream.end();
+
+  return promise;
+}
+
+async function* parseTransactionsTable(
+  tableStream: ReadableStream<Uint8Array>,
+): AsyncGenerator<Transaction> {
+  const $ = await cheerioWrappedStream(tableStream);
   const tbody = $("tbody");
 
   // remove unnecessary elements
@@ -192,8 +214,8 @@ function parseRemarks(remarks: string): TransactionMeta {
 
   if (remarks.startsWith("PAYALL RENTAL      -")) {
     return {
-      payeeName: remarks.substring(20)
-    }
+      payeeName: remarks.substring(20),
+    };
   }
 
   let reference: string | undefined = undefined;
@@ -269,7 +291,7 @@ export default defineDriver({
 
   transactionMeta: (t) => parseRemarks(t.raw as string),
 
-  async pull({ logger, createPage, source, storeArtifact }) {
+  async *fetchArtifacts({ logger, createPage, source }) {
     if (!source.username || !source.password) {
       throw new Error("No username/password specified.");
     }
@@ -296,15 +318,18 @@ export default defineDriver({
     logger.info("Getting table HTML");
     const tableHTML = await page.locator("#postedTansactionTable table")
       .innerHTML();
-    await storeArtifact("table.html", tableHTML);
+    yield ["table.html", tableHTML];
 
     logger.info("Signing off");
-    await page.locator("#signoff-button").click();
+    await page.locator("#signoff-button").click().catch(() => {});
+  },
 
-    logger.info("Parsing table");
-    const transactions = [...parseTransactionsTable(tableHTML)];
-    logger.info(`Extracted ${transactions.length} transactions`);
+  async *parseArtifacts({ logger }, artifacts) {
+    for await (const { name, readable } of artifacts) {
+      if (name !== "table.html") continue;
 
-    return { transactions };
+      logger.info("Parsing table.html");
+      yield* parseTransactionsTable(readable);
+    }
   },
 });

@@ -9,45 +9,12 @@ import { load } from "cheerio";
 import {
   defineDriver,
   type Logger,
+  parseDdMmmYyyy,
   parseFloatSafely,
   Transaction,
 } from "../lib.ts";
 
 const DRIVER_NAME = "grabpay";
-
-function parseStatementDate(date: string): Temporal.PlainDate {
-  const parts = date.split(" ");
-  if (parts.length !== 3) {
-    throw new Error('Invalid short date format. Expected "DD Mon YYYY".');
-  }
-
-  const day = parseInt(parts[0], 10);
-  const monthAbbreviation = parts[1];
-  const year = parseInt(parts[2], 10);
-
-  const monthMap: Record<string, number> = {
-    "Jan": 1,
-    "Feb": 2,
-    "Mar": 3,
-    "Apr": 4,
-    "May": 5,
-    "Jun": 6,
-    "Jul": 7,
-    "Aug": 8,
-    "Sep": 9,
-    "Oct": 10,
-    "Nov": 11,
-    "Dec": 12,
-  };
-
-  const month = monthMap[monthAbbreviation];
-
-  if (!month) {
-    throw new Error(`Invalid month abbreviation: ${monthAbbreviation}`);
-  }
-
-  return new Temporal.PlainDate(year, month, day);
-}
 
 function getTransactionRows(htmlContent: string): string[][] {
   // Specify the start and end HTML comments
@@ -116,7 +83,7 @@ async function* fetchMessages(
   logger.info("Disconnected from IMAP server.");
 }
 
-async function parseMessageRaw(raw: Uint8Array) {
+async function parseMessageRaw(raw: Uint8Array | ReadableStream<Uint8Array>) {
   // Parse the EML file using postal-mime
   const parsedEmail = await PostalMime.parse(raw);
 
@@ -126,19 +93,18 @@ async function parseMessageRaw(raw: Uint8Array) {
   // Get the date of the statement
   const $a = load(htmlContent);
   const dateText = $a("td[width=240]").text().trim();
-  const date = parseStatementDate(dateText);
+  const date = parseDdMmmYyyy(dateText);
 
   const rows = getTransactionRows(htmlContent);
 
   return { date, rows };
 }
 
-function loadTransactions(
-  transactions: Transaction[],
+function* loadTransactionsGenerator(
   account: string,
   date: Temporal.PlainDate,
   rows: string[][],
-) {
+): Generator<Transaction, void, undefined> {
   for (const row of rows) {
     const [_, rawDescription, paymentMethod, amount] = row;
     const amountFloat = parseFloatSafely(amount);
@@ -146,18 +112,16 @@ function loadTransactions(
     const absoluteAmount = Math.abs(amountFloat);
 
     if (rawDescription === "Top Up") {
-      // Top Up GrabPay, record as a credit
-      transactions.push(
-        new Transaction(
-          account,
-          date,
-          `GrabPay Top Up - ${paymentMethod}`,
-          absoluteAmount,
-          false,
-          false,
-          DRIVER_NAME,
-          ["U", date.toString(), row],
-        ),
+      // Top Up GrabPay, yield as a credit
+      yield new Transaction(
+        account,
+        date,
+        `GrabPay Top Up - ${paymentMethod}`,
+        absoluteAmount,
+        false,
+        false,
+        DRIVER_NAME,
+        ["U", date.toString(), row],
       );
     } else {
       let description = "";
@@ -169,40 +133,34 @@ function loadTransactions(
         description = rawDescription;
       }
 
-      // The actual transaction
-      transactions.push(
-        new Transaction(
-          account,
-          date,
-          description,
-          absoluteAmount,
-          isDebitFromGrabPay,
-          false,
-          DRIVER_NAME,
-          ["T", date.toString(), row],
-        ),
+      // Yield the actual transaction
+      yield new Transaction(
+        account,
+        date,
+        description,
+        absoluteAmount,
+        isDebitFromGrabPay,
+        false,
+        DRIVER_NAME,
+        ["T", date.toString(), row],
       );
 
       // This transaction was performed using non-wallet
       // Emulate a GrabPay topup
       if (paymentMethod) {
-        transactions.push(
-          new Transaction(
-            account,
-            date,
-            `GrabPay Top Up for ${rawDescription}`,
-            absoluteAmount,
-            !isDebitFromGrabPay,
-            false,
-            DRIVER_NAME,
-            ["R", date.toString(), row],
-          ),
+        yield new Transaction(
+          account,
+          date,
+          `GrabPay Top Up for ${rawDescription}`,
+          absoluteAmount,
+          !isDebitFromGrabPay,
+          false,
+          DRIVER_NAME,
+          ["R", date.toString(), row],
         );
       }
     }
   }
-
-  return transactions;
 }
 
 export default defineDriver({
@@ -214,7 +172,7 @@ export default defineDriver({
 
   transactionMeta: (t) => ({ payeeName: t.description }),
 
-  async pull({ source, storeArtifact, logger }) {
+  async *fetchArtifacts({ source, logger }) {
     const messages = fetchMessages(
       source as object as {
         server: string;
@@ -223,18 +181,27 @@ export default defineDriver({
         port: number;
       },
       source.folder as string,
-      logger
+      logger,
     );
 
-    const transactions: Transaction[] = [];
     for await (const msg of messages) {
       if (msg.raw) {
-        const { date, rows } = await parseMessageRaw(msg.raw);
-        await storeArtifact(`messages/${date.toString()}.eml`, msg.raw);
-        loadTransactions(transactions, source.username as string, date, rows);
+        const { date } = await parseMessageRaw(msg.raw);
+        yield [`messages/${date.toString()}.eml`, msg.raw];
       }
     }
+  },
 
-    return { transactions };
+  async *parseArtifacts({ source, logger }, artifacts) {
+    for await (const { name, readable } of artifacts) {
+      if (readable) {
+        try {
+          const { date, rows } = await parseMessageRaw(readable);
+          yield* loadTransactionsGenerator(source.username as string, date, rows);
+        } catch (_error) {
+          logger.error(`Failed to parse artifact: ${name}`);
+        }
+      }
+    }
   },
 });

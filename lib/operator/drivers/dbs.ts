@@ -1,4 +1,4 @@
-import { parse as parseCsv } from "@std/csv";
+import { CsvParseStream } from "@std/csv";
 import * as cheerio from "cheerio";
 import getStream from "get-stream";
 
@@ -8,6 +8,7 @@ import {
   Logger,
   type NotifyFn,
   type Page,
+  parseDdMmmYyyy,
   parseFloatSafely,
   Transaction,
   type TransactionMeta,
@@ -184,7 +185,8 @@ const TRANSACTION_CODES: Record<string, string> = {
   "CUS": "Singapore Customs",
   "CUT": "Call Centre Unit Trust",
   "C-WDL": "CIRRUS Cash Withdrawal",
-  "D2P": "D2Pay transaction, <a href='bank-payment-enets-d2pay-application.html' target='_blank' style='color:black'>Learn More</a>",
+  "D2P":
+    "D2Pay transaction, <a href='bank-payment-enets-d2pay-application.html' target='_blank' style='color:black'>Learn More</a>",
   "DBS One": "Unit Trust from DBS One Customer",
   "DBSC": "Bill Payment to DBS/POSB Credit Cards",
   "DBSF": "Bill Payment to DBS SF",
@@ -222,7 +224,8 @@ const TRANSACTION_CODES: Record<string, string> = {
   "EAS": "Bill Payment to East Asia Institute of Management",
   "ECM": "E-Commerce Transactions",
   "EDB": "Economic Development Board",
-  "EDU": "Bill Payment to Mgt Devt Institute of Singapore / Singapore Indian Development Association (SINDA) - Step Tuition Fees , Project Teach Fee",
+  "EDU":
+    "Bill Payment to Mgt Devt Institute of Singapore / Singapore Indian Development Association (SINDA) - Step Tuition Fees , Project Teach Fee",
   "EFX": "Donation to Evangel Family Church",
   "EHD": "Environmental Health Department",
   "ENV": "Ministry of the Environment (all other payments)",
@@ -328,8 +331,10 @@ const TRANSACTION_CODES: Record<string, string> = {
   "IBAS": "Settlement of Securities by Investor Services",
   "IBCL": "Online Account Closure",
   "IBG": "Payments / Collections via GIRO",
-  "ICA followed by set of numbers (e.g. ICA CC1234567890)": "Immigration and Checkpoint Authority",
-  "ICB": "Bill Payment to ICBC Singapore Credit Cards / Renminbi Credit Cards / VISA SGC Credit Cards / Visa USD Credit Cards",
+  "ICA followed by set of numbers (e.g. ICA CC1234567890)":
+    "Immigration and Checkpoint Authority",
+  "ICB":
+    "Bill Payment to ICBC Singapore Credit Cards / Renminbi Credit Cards / VISA SGC Credit Cards / Visa USD Credit Cards",
   "ICS": "Premium for Fire Insurance Policy",
   "ICSG": "General Insurance",
   "ICSL": "Life Insurance",
@@ -374,7 +379,8 @@ const TRANSACTION_CODES: Record<string, string> = {
   "JHS": "Bill Payment to Ng Teng Fong General Hospital",
   "JOY": "Bill Payment to Joyalukkas Jewellery",
   "JSG": "Donation to Jamiyah Singapore",
-  "JTC": "Bill Payment to Jurong Town Corporation (JTC) or Town Council - Jurong-Clementi",
+  "JTC":
+    "Bill Payment to Jurong Town Corporation (JTC) or Town Council - Jurong-Clementi",
   "KAP": "Bill Payment to Kaplan Higher education",
   "KAPL": "Bill Payment to Kaplan Higher education",
   "KAYH": "Bill Payment to UOB Kay Hian",
@@ -427,7 +433,8 @@ const TRANSACTION_CODES: Record<string, string> = {
   "MER C": "MEPS Receipt Comm & Charges",
   "MER CHG": "MEPS Receipt Comm & Charges",
   "MGT": "Management Fees",
-  "MIN": "Donation to Movement for the Intellectually Disabled of Singapore (MINDS)",
+  "MIN":
+    "Donation to Movement for the Intellectually Disabled of Singapore (MINDS)",
   "MISC": "Miscellaneous Payment",
   "MMINT": "Interest on MMA Account",
   "MNS": "Bill Payment to Manulife (S) Pte Ltd",
@@ -466,7 +473,8 @@ const TRANSACTION_CODES: Record<string, string> = {
   "NET": "Network For Electronics Transfers (NETS)",
   "NETS": "Point-of-Sale Transaction",
   "NEW": "Newspaper Subscription",
-  "NHC": "Bill Payment to National Heart Centre / Donation to New Hope Community Services",
+  "NHC":
+    "Bill Payment to National Heart Centre / Donation to New Hope Community Services",
   "NHG": "Bill Payment to NHG Polyclinic",
   "NHGP": "Bill Payment to NHG Polyclinic",
   "NIF": "Notes Issuance Facility",
@@ -578,7 +586,8 @@ const TRANSACTION_CODES: Record<string, string> = {
   "RTSC": "CDP Charge-Rights Application",
   "RUF": "Revolving Underwriting Facility",
   "RWDL": "Regional Cash Withdrawal",
-  "S PORE POOLS followed by a set of numbers (e.g. S PORE POOLS 1234567890)": "Singapore Pools",
+  "S PORE POOLS followed by a set of numbers (e.g. S PORE POOLS 1234567890)":
+    "Singapore Pools",
   "SAFR": "Bill Payment to SAFRA National Service",
   "SAL": "Salary",
   "SALES": "Sales At ATM",
@@ -661,9 +670,11 @@ const TRANSACTION_CODES: Record<string, string> = {
   "SHUB": "Top-up StarHub Prepaid Card",
   "SI": "Standing Instruction",
   "SICC": "Bill Payment to Singapore Island Country Club",
-  "SIND": "Donation to SINDA - IBR / Bill Payment to Singapore Indian Development Association (SINDA) - Step Tuition Fees, Project Teach Fee",
+  "SIND":
+    "Donation to SINDA - IBR / Bill Payment to Singapore Indian Development Association (SINDA) - Step Tuition Fees, Project Teach Fee",
   "SINDA": "Donation to SINDA",
-  "SINGAPORE followed by set of numbers (e.g. SINGAPORE1234567890)": "Singapore Airlines",
+  "SINGAPORE followed by set of numbers (e.g. SINGAPORE1234567890)":
+    "Singapore Airlines",
   "Singpost": "SAM Machine",
   "SINV": "Bill Payment to Shareinvestor.com Pte Ltd",
   "SIV": "Bill Payment to Shareinvestor.com Pte Ltd",
@@ -943,7 +954,7 @@ const TRANSACTION_CODES: Record<string, string> = {
   "7-Eleven": "Shell Petrol Station",
   "CIF ": "Cheque Issuance Fee",
   "CIW": "Cheque Issuance Fee Waiver",
-  "UPI": "Debit Card Transaction"
+  "UPI": "Debit Card Transaction",
 };
 
 export function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
@@ -1148,46 +1159,51 @@ function buildRaw(row: string[], indices: HeaderIndices): string[] {
   ];
 }
 
-function* parseDbsCsv(contents: string): Generator<Transaction> {
-  if (!contents.includes("Account Details For:")) {
-    throw new Error("Invalid CSV");
-  }
+async function* parseDbsCsvStream(
+  readable: ReadableStream<Uint8Array>,
+): AsyncGenerator<Transaction> {
+  const csv = readable
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new CsvParseStream());
 
-  const start = contents.indexOf("Transaction Date,");
+  let headerRow: string[] | undefined;
+  let indices: HeaderIndices | undefined;
+  let account = "";
 
-  const head = contents.substring(0, start).trim().split("\n");
-  const account = head[0].split(",")[1];
+  for await (const row of csv) {
+    if (row.length === 2) {
+      const [prop, value] = row;
+      if (prop === "Account Details For:") {  
+        account = value;
+      }
+      continue;
+    }
 
-  const body = contents.substring(start).trim();
-  const rows = parseCsv(body);
-  const headerRow = rows.shift();
+    if (!headerRow) {
+      headerRow = row;
+      indices = parseHeader(headerRow);
+      continue;
+    }
 
-  if (!headerRow) {
-    throw new Error("Invalid CSV");
-  }
+    if (!indices) {
+      throw new Error("Header row not found");
+    }
 
-  const indices = parseHeader(headerRow);
-
-  const transactions: Transaction[] = [];
-  for (const cells of rows) {
-    // trim each cell
-    cells.forEach((v, i) => (cells[i] = v.trim()));
+    // this is a body row
+    row.forEach((v, i) => (row[i] = v.trim()));
 
     // parse date
-    const rawDate = new Date(cells[0]);
-    const date = rawDate.toTemporalInstant().toZonedDateTimeISO(
-      "Asia/Singapore",
-    ).toPlainDate();
+    const date = parseDdMmmYyyy(row[0]);
 
-    const rawRefs = buildRaw(cells, indices);
+    const rawRefs = buildRaw(row, indices);
 
     // parse desc
-    const description = buildDescription(cells, indices);
+    const description = buildDescription(row, indices);
 
     // parse amount
     const { idxCreditAmount, idxDebitAmount } = indices;
-    const creditAmount = parseFloatSafely(cells[idxCreditAmount]);
-    const debitAmount = parseFloatSafely(cells[idxDebitAmount]);
+    const creditAmount = parseFloatSafely(row[idxCreditAmount]);
+    const debitAmount = parseFloatSafely(row[idxDebitAmount]);
     const absoluteAmount = debitAmount || creditAmount;
     const isDebit = debitAmount > 0;
 
@@ -1202,8 +1218,6 @@ function* parseDbsCsv(contents: string): Generator<Transaction> {
       rawRefs,
     );
   }
-
-  return transactions;
 }
 
 async function triggerDownloadCsv(
@@ -1219,37 +1233,32 @@ async function triggerDownloadCsv(
   return downloadedString;
 }
 
-async function* processAccount(
-  { frame, page, logger, storeArtifact, optionValue, label }: {
-    frame: FrameLocator;
-    page: Page;
-    logger: Logger;
-    storeArtifact: (name: string, contents: string) => Promise<void>;
-    optionValue: string;
-    label: string;
-  },
-): AsyncGenerator<Transaction> {
-  logger.info(`Processing ${label}`, { optionValue, label });
-  await frame.locator("#account_number_select").selectOption(optionValue);
-  await frame.locator("#currency2").selectOption("SGD");
-  await frame.locator("#transPeriod").click();
-  await frame.locator("li").filter({ hasText: "Last 6 Months" }).click();
-  await frame.getByRole("button", { name: "Go" }).click();
-  await page.waitForTimeout(1000);
+async function* generateArtifacts(
+  { frame, page, logger }: { frame: FrameLocator; page: Page; logger: Logger },
+): AsyncGenerator<[string, string]> {
+  const accounts = await getAccounts(frame);
 
-  const tabs = frame.locator("#main-tabs li");
-  const tabCount = await tabs.count();
-  if (tabCount === 0) {
-    const csvString = await triggerDownloadCsv({ page, frame });
-    await storeArtifact(`${label}.csv`, csvString);
-    yield* parseDbsCsv(csvString);
-  } else {
-    for (let i = 0; i < tabCount; i++) {
-      const element = tabs.nth(i);
-      await element.click();
+  for (const [optionValue, label] of accounts) {
+    logger.info(`Processing ${label}`, { optionValue, label });
+    await frame.locator("#account_number_select").selectOption(optionValue);
+    await frame.locator("#currency2").selectOption("SGD");
+    await frame.locator("#transPeriod").click();
+    await frame.locator("li").filter({ hasText: "Last 6 Months" }).click();
+    await frame.getByRole("button", { name: "Go" }).click();
+    await page.waitForTimeout(1000);
+
+    const tabs = frame.locator("#main-tabs li");
+    const tabCount = await tabs.count();
+    if (tabCount === 0) {
       const csvString = await triggerDownloadCsv({ page, frame });
-      await storeArtifact(`${label} ${i}.csv`, csvString);
-      yield* parseDbsCsv(csvString);
+      yield [`${label}.csv`, csvString];
+    } else {
+      for (let i = 0; i < tabCount; i++) {
+        const element = tabs.nth(i);
+        await element.click();
+        const csvString = await triggerDownloadCsv({ page, frame });
+        yield [`${label} ${i}.csv`, csvString];
+      }
     }
   }
 }
@@ -1258,7 +1267,8 @@ export default defineDriver({
   name: DRIVER_NAME,
   supportsSource: (source) => !!source.website?.includes("dbs.com.sg"),
   transactionMeta: (t) => parseRowMeta(t.raw as string[]),
-  async pull({ source, createPage, storeArtifact, logger, notify }) {
+
+  async *fetchArtifacts({ source, createPage, logger, notify }) {
     const { username, password } = source;
     if (!username || !password) {
       throw new Error("No username/password provided.");
@@ -1276,22 +1286,19 @@ export default defineDriver({
     logger.info("Initiating digital token prompt");
     await process2FA({ notify, key: source.key || "", frame, logger });
 
-    // iterate through options under selector, but ignore deposits (0030)
-    const accounts = await getAccounts(frame);
+    yield* generateArtifacts({ frame, page, logger });
 
-    const transactions: Transaction[] = [];
-    const params = { frame, page, logger, storeArtifact };
-    for (const [optionValue, label] of accounts) {
-      const accountTransactions = await Array.fromAsync(
-        processAccount({ ...params, optionValue, label }),
-      );
-      transactions.push(...accountTransactions);
-    }
-
+    logger.info("Logging out");
     await page.frameLocator('frame[name="user_area"]')
-      .getByRole("link", { name: "Proceed to Logout" }).click();
-    await frame.getByRole("button", { name: "Logout Now" }).click();
+      .getByRole("link", { name: "Proceed to Logout" }).click().catch(() => {});
+  },
 
-    return { transactions };
+  async *parseArtifacts({ logger }, artifacts) {
+    for await (const { name, readable } of artifacts) {
+      if (!name.endsWith(".csv")) continue;
+
+      logger.info(`Parsing artifact: ${name}`);
+      yield* parseDbsCsvStream(readable);
+    }
   },
 });

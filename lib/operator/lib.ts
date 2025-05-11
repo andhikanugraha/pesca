@@ -28,11 +28,24 @@ export interface ScraperParams {
 
 export type Scraper = (p: ScraperParams) => Promise<Transaction[]>;
 
+export interface StoredArtifact {
+  name: string;
+  readable: ReadableStream<Uint8Array>;
+}
+
 export interface DriverDefinition {
   name: string;
-  pull: (p: ScraperParams) => Promise<DriverOutput>;
   supportsSource: (p: UnresolvedSourceParams) => boolean;
   transactionMeta: (t: Transaction) => TransactionMeta;
+
+  // Gen 2
+  fetchArtifacts: (
+    p: ScraperParams,
+  ) => AsyncGenerator<[name: string, contents: string | Uint8Array | ReadableStream<Uint8Array>]>;
+  parseArtifacts: (
+    p: { source: SourceParams; logger: Logger },
+    artifacts: AsyncIterable<StoredArtifact>,
+  ) => AsyncGenerator<Transaction>;
 }
 
 export interface DriverOutput {
@@ -59,6 +72,40 @@ export function parseFloatSafely(
   }
 }
 
+export function parseDdMmmYyyy(date: string): Temporal.PlainDate {
+  const parts = date.split(" ");
+  if (parts.length !== 3) {
+    throw new Error('Invalid short date format. Expected "DD Mon YYYY".');
+  }
+
+  const day = parseInt(parts[0], 10);
+  const monthAbbreviation = parts[1];
+  const year = parseInt(parts[2], 10);
+
+  const monthMap: Record<string, number> = {
+    "Jan": 1,
+    "Feb": 2,
+    "Mar": 3,
+    "Apr": 4,
+    "May": 5,
+    "Jun": 6,
+    "Jul": 7,
+    "Aug": 8,
+    "Sep": 9,
+    "Oct": 10,
+    "Nov": 11,
+    "Dec": 12,
+  };
+
+  const month = monthMap[monthAbbreviation];
+
+  if (!month) {
+    throw new Error(`Invalid month abbreviation: ${monthAbbreviation}`);
+  }
+
+  return new Temporal.PlainDate(year, month, day);
+}
+
 export async function copyForBackup(path: string) {
   if (!await exists(path)) return;
 
@@ -72,16 +119,18 @@ export async function copyForBackup(path: string) {
 
 export async function writeFile(
   path: string,
-  contents: string | Uint8Array,
+  contents: string | Uint8Array | ReadableStream<Uint8Array>,
   backup = false,
 ) {
   await ensureFile(path);
   if (backup) {
     await copyForBackup(path);
   }
+
   if (typeof contents === "string") {
-    await Deno.writeTextFile(path, contents);
-  } else {
-    await Deno.writeFile(path, contents);
+    return Deno.writeTextFile(path, contents);
   }
+
+  // Uint8Array or ReadableStream
+  return Deno.writeFile(path, contents);
 }
