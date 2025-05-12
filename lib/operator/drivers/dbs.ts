@@ -1207,16 +1207,17 @@ async function* parseDbsCsvStream(
     const absoluteAmount = debitAmount || creditAmount;
     const isDebit = debitAmount > 0;
 
-    yield new Transaction(
+    yield new Transaction({
       account,
       date,
       description,
       absoluteAmount,
       isDebit,
-      undefined,
-      DRIVER_NAME,
-      rawRefs,
-    );
+      isPending: undefined,
+      driver: DRIVER_NAME,
+      raw: rawRefs,
+      meta: parseRowMeta(rawRefs),
+    });
   }
 }
 
@@ -1266,7 +1267,6 @@ async function* generateArtifacts(
 export default defineDriver({
   name: DRIVER_NAME,
   supportsSource: (source) => !!source.website?.includes("dbs.com.sg"),
-  transactionMeta: (t) => parseRowMeta(t.raw as string[]),
 
   async *fetchArtifacts({ source, createPage, logger, notify }) {
     const { username, password } = source;

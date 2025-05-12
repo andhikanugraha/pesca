@@ -15,7 +15,7 @@ import {
 } from "./consolidate/deduplicate.ts";
 import { writeFile } from "./lib.ts";
 import { getRuleMapperFromPath } from "./consolidate/rules.ts";
-import { getTransactionMeta, selectDriver } from "./driver.ts";
+import { selectDriver } from "./driver.ts";
 
 export interface EnrichedTransaction extends DeduplicatedTransaction {
   meta: TransactionMeta;
@@ -46,17 +46,14 @@ export async function* enrichTransactions(
   notesMap: Map<string, RowWithNotes>,
 ): AsyncGenerator<EnrichedTransaction> {
   for await (const transaction of transactions) {
-    const meta = getTransactionMeta(transaction);
-
     // Compute category
     let category = rulesMapper(transaction);
     const originalCategory = category;
 
-    category = applyManualMap(manualMap, meta, category);
+    category = applyManualMap(manualMap, transaction.meta, category);
     const notes = notesMap.get(transaction.id)?.notes || "";
 
     const enriched = Object.assign(transaction, {
-      meta,
       category,
       originalCategory,
       notes,

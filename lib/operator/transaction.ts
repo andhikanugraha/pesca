@@ -1,5 +1,3 @@
-import { JsonValue } from "@std/json";
-
 export interface TransactionMeta {
   displayText?: string;
   reference?: string;
@@ -10,87 +8,48 @@ export interface TransactionMeta {
   originalCurrencyAmount?: number;
 }
 
-interface TransactionJSON {
-  account: string;
-  date: string;
-  description: string;
-  absoluteAmount: number;
-  isDebit: boolean;
-  isPending: boolean;
-  payee: string;
-  driver?: string;
-  raw?: unknown;
-}
-
 export class Transaction {
   account: string;
   date: Temporal.PlainDate;
-  description: string;
+  description?: string;
   absoluteAmount: number;
   isDebit: boolean;
   isPending: boolean;
-  driver: string;
-  raw: unknown;
+  raw: string | (string | string[])[];
+
+  // TransactionMeta fields
+  meta: TransactionMeta;
+
+  // Allow other properties
+  [prop: string]: unknown;
 
   constructor(
-    account: string,
-    date: Temporal.PlainDate,
-    description: string,
-    absoluteAmount: number,
-    isDebit = true,
-    isPending = false,
-    driver = "",
-    raw: unknown = null,
+    props: Partial<Transaction> & {
+      // Required fields
+      account: string;
+      date: Temporal.PlainDate | string;
+      absoluteAmount: number;
+      raw: string | (string | string[])[];
+    },
   ) {
-    this.account = account;
-    this.date = date;
-    this.description = description;
-    this.absoluteAmount = absoluteAmount;
-    this.isDebit = isDebit;
-    this.isPending = isPending;
-    this.driver = driver;
-    this.raw = raw;
+    this.account = props.account;
+    this.date = Temporal.PlainDate.from(props.date);
+    this.absoluteAmount = props.absoluteAmount;
+    this.raw = props.raw;
+
+    this.description = props.description ?? "";
+    this.isDebit = props.isDebit ?? true;
+    this.isPending = props.isPending ?? false;
+
+    // Meta fields
+    this.meta = props.meta ?? {};
   }
 
   get amount() {
     return (this.isDebit ? 1 : -1) * this.absoluteAmount;
   }
 
-  static fromJSON({
-    account,
-    date,
-    description,
-    absoluteAmount,
-    isDebit,
-    isPending,
-    driver = "",
-    raw = null,
-  }: TransactionJSON) {
-    return new Transaction(
-      account,
-      Temporal.PlainDate.from(date),
-      description,
-      absoluteAmount,
-      isDebit,
-      isPending,
-      driver,
-      raw,
-    );
-  }
-
   static sort(a: Transaction, b: Transaction) {
     return Temporal.PlainDate.compare(a.date, b.date);
-  }
-
-  // Revive Transaction objects from JSON
-  static reviver(_key: string, value: JsonValue) {
-    if (
-      value === null || typeof value !== "object" ||
-      !("date" in (value as object))
-    ) {
-      return value;
-    }
-
-    return Transaction.fromJSON(value as unknown as TransactionJSON);
   }
 }

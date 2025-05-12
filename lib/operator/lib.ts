@@ -36,7 +36,6 @@ export interface StoredArtifact {
 export interface DriverDefinition {
   name: string;
   supportsSource: (p: UnresolvedSourceParams) => boolean;
-  transactionMeta: (t: Transaction) => TransactionMeta;
 
   // Gen 2
   fetchArtifacts: (

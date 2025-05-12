@@ -179,16 +179,17 @@ async function* parseTransactionsTable(
     }
 
     const account = `Citi ` + maskedPAN.slice(-4);
-    yield new Transaction(
+    yield new Transaction({
       account,
       date,
-      remarks.substring(0, 40),
+      description: remarks.substring(0, 40),
       absoluteAmount,
       isDebit,
       isPending,
-      "citibank.com.sg",
-      remarks,
-    );
+      driver: "citibank.com.sg",
+      raw: remarks,
+      meta: parseRemarks(remarks),
+    });
   }
 }
 
@@ -288,8 +289,6 @@ export default defineDriver({
   name: "citibank.com.sg",
 
   supportsSource: (source) => !!source.website?.includes("citibank.com.sg"),
-
-  transactionMeta: (t) => parseRemarks(t.raw as string),
 
   async *fetchArtifacts({ logger, createPage, source }) {
     if (!source.username || !source.password) {

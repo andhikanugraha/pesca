@@ -111,18 +111,24 @@ function* loadTransactionsGenerator(
     const isDebitFromGrabPay = amountFloat < 0;
     const absoluteAmount = Math.abs(amountFloat);
 
+    const baseTransaction = {
+      account,
+      date,
+      absoluteAmount,
+      isPending: false,
+      driver: DRIVER_NAME,
+    }
+
     if (rawDescription === "Top Up") {
       // Top Up GrabPay, yield as a credit
-      yield new Transaction(
-        account,
-        date,
-        `GrabPay Top Up - ${paymentMethod}`,
-        absoluteAmount,
-        false,
-        false,
-        DRIVER_NAME,
-        ["U", date.toString(), row],
-      );
+      const description = `GrabPay Top Up - ${paymentMethod}`;
+      yield new Transaction({
+        ...baseTransaction,
+        description,
+        meta: { displayText: description },
+        isDebit: false,
+        raw: ["U", date.toString(), row],
+      });
     } else {
       let description = "";
       if (rawDescription.startsWith("Paid to")) {
@@ -134,30 +140,25 @@ function* loadTransactionsGenerator(
       }
 
       // Yield the actual transaction
-      yield new Transaction(
-        account,
-        date,
+      yield new Transaction({
+        ...baseTransaction,
         description,
-        absoluteAmount,
-        isDebitFromGrabPay,
-        false,
-        DRIVER_NAME,
-        ["T", date.toString(), row],
-      );
+        meta: { payeeName: description },
+        isDebit: isDebitFromGrabPay,
+        raw: ["T", date.toString(), row],
+      });
 
       // This transaction was performed using non-wallet
       // Emulate a GrabPay topup
       if (paymentMethod) {
-        yield new Transaction(
-          account,
-          date,
-          `GrabPay Top Up for ${rawDescription}`,
-          absoluteAmount,
-          !isDebitFromGrabPay,
-          false,
-          DRIVER_NAME,
-          ["R", date.toString(), row],
-        );
+        const description = `GrabPay Top Up for ${rawDescription}`;
+        yield new Transaction({
+          ...baseTransaction,
+          description,
+          meta: { displayText: description },
+          isDebit: !isDebitFromGrabPay,
+          raw: ["R", date.toString(), row],
+        });
       }
     }
   }
@@ -169,8 +170,6 @@ export default defineDriver({
   supportsSource: (source) =>
     !!(source.from === "no-reply@grab.com" && source.server &&
       source.username && source.password && source.port && source.folder),
-
-  transactionMeta: (t) => ({ payeeName: t.description }),
 
   async *fetchArtifacts({ source, logger }) {
     const messages = fetchMessages(
@@ -194,13 +193,17 @@ export default defineDriver({
 
   async *parseArtifacts({ source, logger }, artifacts) {
     for await (const { name, readable } of artifacts) {
-      if (readable) {
-        try {
-          const { date, rows } = await parseMessageRaw(readable);
-          yield* loadTransactionsGenerator(source.username as string, date, rows);
-        } catch (_error) {
-          logger.error(`Failed to parse artifact: ${name}`);
-        }
+      if (!readable) continue;
+
+      try {
+        const { date, rows } = await parseMessageRaw(readable);
+        yield* loadTransactionsGenerator(
+          source.username as string,
+          date,
+          rows,
+        );
+      } catch (_error) {
+        logger.error(`Failed to parse artifact: ${name}`);
       }
     }
   },
