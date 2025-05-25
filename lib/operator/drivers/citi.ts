@@ -314,6 +314,9 @@ export default defineDriver({
     logger.info("Expanding transactions table");
     await loadFullTransactionsTable({ page, logger });
 
+    const pageHTML = await page.content();
+    yield ["page.html", pageHTML];
+
     logger.info("Getting table HTML");
     const tableHTML = await page.locator("#postedTansactionTable table")
       .innerHTML();
