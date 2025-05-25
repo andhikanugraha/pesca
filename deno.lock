@@ -1,22 +1,18 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@hono/hono@^4.7.4": "4.7.4",
+    "jsr:@hono/hono@^4.7.10": "4.7.10",
     "jsr:@std/bytes@^1.0.5": "1.0.5",
-    "jsr:@std/csv@^1.0.5": "1.0.5",
-    "jsr:@std/fs@^1.0.14": "1.0.14",
-    "jsr:@std/json@^1.0.1": "1.0.1",
-    "jsr:@std/path@^1.0.8": "1.0.8",
-    "jsr:@std/streams@^1.0.7": "1.0.9",
-    "jsr:@std/streams@^1.0.8": "1.0.9",
+    "jsr:@std/csv@^1.0.6": "1.0.6",
+    "jsr:@std/fs@^1.0.17": "1.0.17",
+    "jsr:@std/json@^1.0.2": "1.0.2",
+    "jsr:@std/path@^1.0.9": "1.0.9",
     "jsr:@std/streams@^1.0.9": "1.0.9",
-    "jsr:@std/yaml@^1.0.5": "1.0.5",
+    "jsr:@std/yaml@^1.0.6": "1.0.6",
     "jsr:@workingdevshero/deno-imap@1": "1.0.0",
-    "npm:@ngrok/ngrok@^1.4.1": "1.5.1",
     "npm:@ngrok/ngrok@^1.5.1": "1.5.1",
     "npm:cheerio@1": "1.0.0",
     "npm:get-stream@^9.0.1": "9.0.1",
-    "npm:open@^10.1.0": "10.1.2",
     "npm:open@^10.1.2": "10.1.2",
     "npm:pino-pretty@*": "13.0.0",
     "npm:pino@^9.6.0": "9.6.0",
@@ -25,32 +21,32 @@
     "npm:xxhash-wasm@*": "1.1.0"
   },
   "jsr": {
-    "@hono/hono@4.7.4": {
-      "integrity": "c03c9cbe0fbfc4e51f3fee6502a7903aa4f9ef7c2c98635607b15eee14258825"
+    "@hono/hono@4.7.10": {
+      "integrity": "e59029e252af371abe43e8e4f9a115e38974c6bd5972022372bf89f763269cc7"
     },
     "@std/bytes@1.0.5": {
       "integrity": "4465dd739d7963d964c809202ebea6d5c6b8e3829ef25c6a224290fbb8a1021e"
     },
-    "@std/csv@1.0.5": {
-      "integrity": "02006ffd77e84b2bf01968d4e792f0b5cba057c73dc6a89accb96d803493675f",
+    "@std/csv@1.0.6": {
+      "integrity": "52ef0e62799a0028d278fa04762f17f9bd263fad9a8e7f98c14fbd371d62d9fd",
       "dependencies": [
-        "jsr:@std/streams@^1.0.8"
+        "jsr:@std/streams"
       ]
     },
-    "@std/fs@1.0.14": {
-      "integrity": "1e84bf0b95fe08f41f1f4aea9717bbf29f45408a56ce073b0114474ce1c9fccf",
+    "@std/fs@1.0.17": {
+      "integrity": "1c00c632677c1158988ef7a004cb16137f870aafdb8163b9dce86ec652f3952b",
       "dependencies": [
         "jsr:@std/path"
       ]
     },
-    "@std/json@1.0.1": {
-      "integrity": "1f0f70737e8827f9acca086282e903677bc1bb0c8ffcd1f21bca60039563049f",
+    "@std/json@1.0.2": {
+      "integrity": "d9e5497801c15fb679f55a2c01c7794ad7a5dfda4dd1bebab5e409cb5e0d34d4",
       "dependencies": [
-        "jsr:@std/streams@^1.0.7"
+        "jsr:@std/streams"
       ]
     },
-    "@std/path@1.0.8": {
-      "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
+    "@std/path@1.0.9": {
+      "integrity": "260a49f11edd3db93dd38350bf9cd1b4d1366afa98e81b86167b4e3dd750129e"
     },
     "@std/streams@1.0.9": {
       "integrity": "a9d26b1988cdd7aa7b1f4b51e1c36c1557f3f252880fa6cc5b9f37078b1a5035",
@@ -58,8 +54,8 @@
         "jsr:@std/bytes"
       ]
     },
-    "@std/yaml@1.0.5": {
-      "integrity": "71ba3d334305ee2149391931508b2c293a8490f94a337eef3a09cade1a2a2742"
+    "@std/yaml@1.0.6": {
+      "integrity": "c9a5a914e1d51c46756cb10e356710035cfa905e713c90d3b711413fd3aead27"
     },
     "@workingdevshero/deno-imap@1.0.0": {
       "integrity": "b70048842a3089d92705e9d7d57298581ff74a23729dce07bd44ce85c79cc6d0"
@@ -506,13 +502,13 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@hono/hono@^4.7.4",
-      "jsr:@std/csv@^1.0.5",
-      "jsr:@std/fs@^1.0.14",
-      "jsr:@std/json@^1.0.1",
-      "jsr:@std/path@^1.0.8",
+      "jsr:@hono/hono@^4.7.10",
+      "jsr:@std/csv@^1.0.6",
+      "jsr:@std/fs@^1.0.17",
+      "jsr:@std/json@^1.0.2",
+      "jsr:@std/path@^1.0.9",
       "jsr:@std/streams@^1.0.9",
-      "jsr:@std/yaml@^1.0.5",
+      "jsr:@std/yaml@^1.0.6",
       "jsr:@workingdevshero/deno-imap@1",
       "npm:@ngrok/ngrok@^1.5.1",
       "npm:cheerio@1",

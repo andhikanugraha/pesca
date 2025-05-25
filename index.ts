@@ -2,7 +2,7 @@ import { resolve } from "@std/path";
 import { parse } from "@std/yaml";
 import open from "open";
 import { createOperator } from "./lib/operator/operator.ts";
-import startServer from "./lib/server/server.tsx";
+import startServer from "./lib/server/server.ts";
 import { createScheduler } from "./lib/scheduler/scheduler.ts";
 import { resolveConfig } from "./lib/config.ts";
 import { logger } from "./lib/logger.ts";

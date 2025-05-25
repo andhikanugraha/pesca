@@ -1,16 +1,16 @@
 {
   "imports": {
     "@ngrok/ngrok": "npm:@ngrok/ngrok@^1.5.1",
-    "@std/csv": "jsr:@std/csv@^1.0.5",
-    "@std/fs": "jsr:@std/fs@^1.0.14",
-    "@std/json": "jsr:@std/json@^1.0.1",
-    "@std/path": "jsr:@std/path@^1.0.8",
+    "@std/csv": "jsr:@std/csv@^1.0.6",
+    "@std/fs": "jsr:@std/fs@^1.0.17",
+    "@std/json": "jsr:@std/json@^1.0.2",
+    "@std/path": "jsr:@std/path@^1.0.9",
     "@std/streams": "jsr:@std/streams@^1.0.9",
-    "@std/yaml": "jsr:@std/yaml@^1.0.5",
+    "@std/yaml": "jsr:@std/yaml@^1.0.6",
     "@workingdevshero/deno-imap": "jsr:@workingdevshero/deno-imap@^1.0.0",
     "cheerio": "npm:cheerio@^1.0.0",
     "get-stream": "npm:get-stream@^9.0.1",
-    "hono": "jsr:@hono/hono@^4.7.4",
+    "hono": "jsr:@hono/hono@^4.7.10",
     "open": "npm:open@^10.1.2",
     "pino": "npm:pino@^9.6.0",
     "playwright": "npm:playwright@^1.52.0",
@@ -22,9 +22,5 @@
     "main": "deno --allow-read --allow-write --allow-sys --allow-env --allow-run --allow-net --allow-ffi --allow-import=\"cdn.sheetjs.com:443,jsr.io:443\" index.ts",
     "pretty": "deno run -R -E npm:pino-pretty --color",
     "start": "deno task main | deno task pretty"
-  },
-  "compilerOptions": {
-    "jsx": "precompile",
-    "jsxImportSource": "hono/jsx"
   }
 }
