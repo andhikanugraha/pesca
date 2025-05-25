@@ -1,9 +1,4 @@
-import { JsonParseStream } from "@std/json";
-
 import { type Config } from "../config.ts";
-import { executePull } from "./pull.ts";
-import { executeConsolidation } from "./consolidate.ts";
-import open from "open";
 import { logger } from "../logger.ts";
 
 type Command = "pull" | "consolidate";
@@ -14,6 +9,9 @@ export interface Operator {
   ): Promise<boolean>;
   pull({ signal }: { signal: AbortSignal }): Promise<boolean>;
   consolidate({ signal }: { signal: AbortSignal }): Promise<boolean>;
+  pullSource(
+    { source, signal }: { source: string; signal: AbortSignal },
+  ): Promise<boolean>;
 }
 
 type Payload = {
@@ -21,42 +19,32 @@ type Payload = {
   commands: Command[];
 };
 
-const TIMEOUT = 5 * 60 * 1000; // 5 minutes
-
-const childFlags = [
-  "--allow-read",
-  "--allow-write",
-  "--allow-sys",
-  "--allow-env",
-  "--allow-run",
-  "--allow-net",
-  "--allow-import=cdn.sheetjs.com,jsr.io",
-  "--unstable-temporal",
-];
-
-async function spawnSelf(payload: Payload, signal: AbortSignal) {
-  const command = new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      ...childFlags,
-      import.meta.filename as string,
-    ],
-    stdin: "piped",
+// Use Deno Worker for operator logic
+function spawnWorker(payload: Payload, signal: AbortSignal) {
+  const worker = new Worker(new URL("./worker.ts", import.meta.url), {
+    type: "module",
   });
-  const child = command.spawn();
+
+  const { promise: result, resolve, reject } = Promise.withResolvers<boolean>();
 
   signal.onabort = () => {
-    try {
-      child.kill();
-      return true;
-    } catch (_e) {
-      return false;
-    }
+    worker.terminate();
+    resolve(false);
   };
 
-  const writer = child.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(JSON.stringify(payload)));
-  return child;
+  worker.onmessage = (e: MessageEvent) => {
+    if (e.data && typeof e.data.success === "boolean") {
+      resolve(e.data.success);
+      worker.terminate();
+    }
+  };
+  worker.onerror = (e) => {
+    reject(e);
+    worker.terminate();
+  };
+
+  worker.postMessage(payload);
+  return result;
 }
 
 export function createOperator(config: Config): Operator {
@@ -67,15 +55,32 @@ export function createOperator(config: Config): Operator {
     },
   ): Promise<boolean> {
     try {
-      const child = await spawnSelf({ config, commands }, signal);
+      logger.info("Spawning operator worker");
+      const success = await spawnWorker({ config, commands }, signal);
+      logger.debug({ success });
+      return success;
+    } catch (error) {
+      logger.error(error);
+      return false;
+    }
+  }
 
-      logger.info("Spawning operator process");
-      await child.output();
-
-      const status = await child.status;
-      logger.debug(status);
-
-      return status.success;
+  async function pullSource(
+    { source, signal }: { source: string; signal: AbortSignal },
+  ): Promise<boolean> {
+    // Clone config and filter sources
+    const filteredConfig = {
+      ...config,
+      sources: config.sources.filter((s) => s.key === source),
+    };
+    try {
+      logger.info(`Spawning operator worker for source: ${source}`);
+      const success = await spawnWorker({
+        config: filteredConfig,
+        commands: ["pull"],
+      }, signal);
+      logger.debug({ success });
+      return success;
     } catch (error) {
       logger.error(error);
       return false;
@@ -86,35 +91,8 @@ export function createOperator(config: Config): Operator {
     run,
     pull: ({ signal }) => run({ commands: ["pull"], signal }),
     consolidate: ({ signal }) => run({ commands: ["consolidate"], signal }),
+    pullSource,
   };
 }
 
-async function main() {
-  const stdinJson = Deno.stdin.readable
-    .pipeThrough(new TextDecoderStream())
-    .pipeThrough(new JsonParseStream())
-    .getReader();
-  const payload = await stdinJson.read();
-  const { config, commands } = payload.value as object as Payload;
-
-  try {
-    setTimeout(() => Deno.exit(1), TIMEOUT);
-    if (commands.includes("pull")) {
-      await executePull(config);
-    }
-    if (commands.includes("consolidate")) {
-      await executeConsolidation(config);
-      if (commands.length === 1) {
-        open(config.xlsx);
-      }
-    }
-    Deno.exit(0);
-  } catch (error) {
-    logger.error(error);
-    Deno.exit(1);
-  }
-}
-
-if (import.meta.main) {
-  main();
-}
+// Remove worker entrypoint from this file
