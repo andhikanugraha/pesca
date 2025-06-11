@@ -126,6 +126,7 @@ export function generateWorkbook(
     ["Amount", (t) => t.amount, 10],
     ["Category", (t) => t.category, 14],
     ["Notes", (t) => t.notes, 30],
+    ["Statement Date", t => t.statementDate?.toString(), 10],
     ["ID", (t) => t.id, null],
     ["AutoCategory", (t) => t.originalCategory, null],
     ["Description", (t) => t.description, null],

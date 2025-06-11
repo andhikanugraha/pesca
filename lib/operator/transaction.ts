@@ -7,7 +7,6 @@ export class Transaction {
   isPending: boolean;
   raw: string | (string | string[])[];
 
-  // Former TransactionMeta fields
   displayText?: string;
   reference?: string;
   payeeName?: string;
@@ -15,8 +14,8 @@ export class Transaction {
   payeeCountryCode?: string;
   originalCurrencyCode?: string;
   originalCurrencyAmount?: number;
+  statementDate?: Temporal.PlainDate;
 
-  // Allow other properties
   [prop: string]: unknown;
 
   constructor(
@@ -38,13 +37,7 @@ export class Transaction {
     this.isPending = props.isPending ?? false;
 
     // Former TransactionMeta fields
-    this.displayText = props.displayText;
-    this.reference = props.reference;
-    this.payeeName = props.payeeName;
-    this.payeeCity = props.payeeCity;
-    this.payeeCountryCode = props.payeeCountryCode;
-    this.originalCurrencyCode = props.originalCurrencyCode;
-    this.originalCurrencyAmount = props.originalCurrencyAmount;
+    Object.assign(this, props);
   }
 
   get amount() {

@@ -1215,7 +1215,7 @@ async function* parseDbsCsvStream(
       isPending: undefined,
       driver: DRIVER_NAME,
       raw: rawRefs,
-      meta: parseRowMeta(rawRefs),
+      ...parseRowMeta(rawRefs),
     });
   }
 }

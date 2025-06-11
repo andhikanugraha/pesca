@@ -115,7 +115,9 @@ async function cheerioWrappedStream(
   readable: ReadableStream<Uint8Array>,
 ): Promise<cheerio.CheerioAPI> {
   const te = new TextEncoder();
-  const { promise, resolve, reject } = Promise.withResolvers<cheerio.CheerioAPI>();
+  const { promise, resolve, reject } = Promise.withResolvers<
+    cheerio.CheerioAPI
+  >();
   const stream = cheerio.decodeStream({}, (err, $) => {
     if (err) return reject(err);
     resolve($);
@@ -141,6 +143,9 @@ async function* parseTransactionsTable(
   $("span.cA-sortText", tbody).remove();
   $("td.cT-bodyTableColumn0", tbody).remove();
 
+  // Map from last 4 digits to statement date
+  const statementDates: Record<string, Temporal.PlainDate> = {};
+
   for (const tr of $("tr", tbody)) {
     const row = $(tr);
 
@@ -151,7 +156,23 @@ async function* parseTransactionsTable(
       rawCredit,
     ] = $("td", row).map((_, td) => $(td).text().trim());
 
-    if (!rawDate) continue;
+    if (!rawDate) {
+      // this is a statement date line
+      const text = rawRemarks;
+      const match = text.match(
+        /Statement As of (\d{2}\/\d{2}\/\d{4})[^0-9]*([0-9]{4})/i,
+      );
+      if (match) {
+        const [d, m, y] = match[1].split("/");
+        const last4 = match[2];
+        statementDates[last4] = new Temporal.PlainDate(
+          parseInt(y),
+          parseInt(m),
+          parseInt(d),
+        );
+      }
+      continue; // skip this row, it's not a transaction
+    }
 
     let absoluteAmount = 0;
     let isDebit = true;
@@ -167,8 +188,11 @@ async function* parseTransactionsTable(
     const [d, m, y] = rawDate.split("/");
     const date = new Temporal.PlainDate(parseInt(y), parseInt(m), parseInt(d));
 
-    const maskedPAN = row.attr("class")?.match(/xxxxxxxxxxxx([0-9]{4})/)?.[0] ??
-      "";
+    // Extract last 4 digits from class attribute
+    const classAttr = row.attr("class") || "";
+    const panMatch = classAttr.match(/xxxxxxxxxxxx([0-9]{4})/);
+    const last4 = panMatch ? panMatch[1] : "";
+    const maskedPAN = panMatch ? panMatch[0] : "";
     const isPending = row.hasClass("pending");
 
     let remarks = rawRemarks;
@@ -177,7 +201,8 @@ async function* parseTransactionsTable(
       remarks = rawRemarks.substring(1);
     }
 
-    const account = `Citi ` + maskedPAN.slice(-4);
+    const account = `Citi ` + last4;
+    const statementDate = statementDates[last4] ?? undefined;
     yield new Transaction({
       account,
       date,
@@ -187,7 +212,9 @@ async function* parseTransactionsTable(
       isPending,
       driver: "citibank.com.sg",
       raw: remarks,
-      meta: parseRemarks(remarks),
+      statementDate,
+      maskedPAN,
+      ...parseRemarks(remarks),
     });
   }
 }

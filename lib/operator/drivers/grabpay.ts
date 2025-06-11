@@ -125,7 +125,7 @@ function* loadTransactionsGenerator(
       yield new Transaction({
         ...baseTransaction,
         description,
-        meta: { displayText: description },
+        displayText: description,
         isDebit: false,
         raw: ["U", date.toString(), row],
       });
@@ -143,7 +143,7 @@ function* loadTransactionsGenerator(
       yield new Transaction({
         ...baseTransaction,
         description,
-        meta: { payeeName: description },
+        payeeName: description,
         isDebit: isDebitFromGrabPay,
         raw: ["T", date.toString(), row],
       });
@@ -155,7 +155,7 @@ function* loadTransactionsGenerator(
         yield new Transaction({
           ...baseTransaction,
           description,
-          meta: { displayText: description },
+          displayText: description,
           isDebit: !isDebitFromGrabPay,
           raw: ["R", date.toString(), row],
         });
