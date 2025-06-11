@@ -3,7 +3,7 @@ import { join, relative, resolve } from "@std/path";
 
 import type { Config } from "../config.ts";
 import { logger } from "../logger.ts";
-import { Transaction, type TransactionMeta } from "./transaction.ts";
+import { Transaction } from "./transaction.ts";
 import {
   generateWorkbook,
   loadEdits,
@@ -18,7 +18,6 @@ import { getRuleMapperFromPath } from "./consolidate/rules.ts";
 import { selectDriver } from "./driver.ts";
 
 export interface EnrichedTransaction extends DeduplicatedTransaction {
-  meta: TransactionMeta;
   category: string;
   originalCategory: string;
   notes: string;
@@ -26,15 +25,15 @@ export interface EnrichedTransaction extends DeduplicatedTransaction {
 
 function applyManualMap(
   manualMap: Map<string, string>,
-  meta: TransactionMeta,
+  transaction: Transaction,
   fallback: string,
 ): string {
   let category = fallback;
-  if (meta.payeeName && manualMap.has(meta.payeeName)) {
-    category = manualMap.get(meta.payeeName) || "";
+  if (transaction.payeeName && manualMap.has(transaction.payeeName)) {
+    category = manualMap.get(transaction.payeeName) || "";
   }
-  if (meta.displayText && manualMap.has(meta.displayText)) {
-    category = manualMap.get(meta.displayText) || "";
+  if (transaction.displayText && manualMap.has(transaction.displayText)) {
+    category = manualMap.get(transaction.displayText) || "";
   }
   return category;
 }
@@ -50,7 +49,7 @@ export async function* enrichTransactions(
     let category = rulesMapper(transaction);
     const originalCategory = category;
 
-    category = applyManualMap(manualMap, transaction.meta, category);
+    category = applyManualMap(manualMap, transaction, category);
     const notes = notesMap.get(transaction.id)?.notes || "";
 
     const enriched = Object.assign(transaction, {

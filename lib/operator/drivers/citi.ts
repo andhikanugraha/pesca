@@ -6,7 +6,6 @@ import {
   type Page,
   parseFloatSafely,
   Transaction,
-  type TransactionMeta,
 } from "../lib.ts";
 
 /*
@@ -193,7 +192,7 @@ async function* parseTransactionsTable(
   }
 }
 
-function parseRemarks(remarks: string): TransactionMeta {
+function parseRemarks(remarks: string): Partial<Transaction> {
   remarks = remarks?.trim() || "";
   if (remarks[0] === "*") {
     remarks = remarks.substring(1);

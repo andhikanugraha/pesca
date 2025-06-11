@@ -11,7 +11,6 @@ import {
   parseDdMmmYyyy,
   parseFloatSafely,
   Transaction,
-  type TransactionMeta,
 } from "../lib.ts";
 
 const DRIVER_NAME = "dbs.com.sg";
@@ -957,7 +956,7 @@ const TRANSACTION_CODES: Record<string, string> = {
   "UPI": "Debit Card Transaction",
 };
 
-export function parseRowMeta([r0, r1, r2, r3, r4]: string[]): TransactionMeta {
+export function parseRowMeta([r0, r1, r2, r3, r4]: string[]): Partial<Transaction> {
   const r4othr = r4.startsWith("OTHR ");
   if (r4othr) r4 = r4.substring(5);
 

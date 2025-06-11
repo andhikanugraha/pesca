@@ -1,13 +1,3 @@
-export interface TransactionMeta {
-  displayText?: string;
-  reference?: string;
-  payeeName?: string;
-  payeeCity?: string;
-  payeeCountryCode?: string;
-  originalCurrencyCode?: string;
-  originalCurrencyAmount?: number;
-}
-
 export class Transaction {
   account: string;
   date: Temporal.PlainDate;
@@ -17,8 +7,14 @@ export class Transaction {
   isPending: boolean;
   raw: string | (string | string[])[];
 
-  // TransactionMeta fields
-  meta: TransactionMeta;
+  // Former TransactionMeta fields
+  displayText?: string;
+  reference?: string;
+  payeeName?: string;
+  payeeCity?: string;
+  payeeCountryCode?: string;
+  originalCurrencyCode?: string;
+  originalCurrencyAmount?: number;
 
   // Allow other properties
   [prop: string]: unknown;
@@ -41,8 +37,14 @@ export class Transaction {
     this.isDebit = props.isDebit ?? true;
     this.isPending = props.isPending ?? false;
 
-    // Meta fields
-    this.meta = props.meta ?? {};
+    // Former TransactionMeta fields
+    this.displayText = props.displayText;
+    this.reference = props.reference;
+    this.payeeName = props.payeeName;
+    this.payeeCity = props.payeeCity;
+    this.payeeCountryCode = props.payeeCountryCode;
+    this.originalCurrencyCode = props.originalCurrencyCode;
+    this.originalCurrencyAmount = props.originalCurrencyAmount;
   }
 
   get amount() {

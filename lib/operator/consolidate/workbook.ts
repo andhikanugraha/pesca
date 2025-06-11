@@ -109,7 +109,7 @@ function generateWorksheet<T>(
 }
 
 function payeeCellValue(t: EnrichedTransaction) {
-  return t.meta.payeeName || t.meta.displayText || t.description;
+  return t.payeeName || t.displayText || t.description;
 }
 
 export function generateWorkbook(
@@ -129,9 +129,9 @@ export function generateWorkbook(
     ["ID", (t) => t.id, null],
     ["AutoCategory", (t) => t.originalCategory, null],
     ["Description", (t) => t.description, null],
-    ["Reference", (t) => t.meta.reference, 40],
-    ["Original Currency Code", (t) => t.meta.originalCurrencyCode, 5],
-    ["Original Currency Amount", (t) => t.meta.originalCurrencyAmount, 16],
+    ["Reference", (t) => t.reference, 40],
+    ["Original Currency Code", (t) => t.originalCurrencyCode, 5],
+    ["Original Currency Amount", (t) => t.originalCurrencyAmount, 16],
   ]);
   XLSX.utils.book_append_sheet(workbook, sheet1, "Transactions");
 

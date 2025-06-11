@@ -2,7 +2,7 @@ import type { FrameLocator, Page } from "playwright";
 import type { Logger } from "pino";
 import { copy, ensureFile, exists } from "@std/fs";
 import type { SourceParams, UnresolvedSourceParams } from "../config.ts";
-import { Transaction, type TransactionMeta } from "./transaction.ts";
+import { Transaction } from "./transaction.ts";
 import type { NotifyFn } from "./pushover.ts";
 import { basename, dirname, join } from "@std/path";
 import type { DisposablePage } from "./browser.ts";
@@ -15,7 +15,6 @@ export {
   type Page,
   type SourceParams,
   Transaction,
-  type TransactionMeta,
 };
 
 export interface ScraperParams {
