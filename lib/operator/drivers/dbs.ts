@@ -1173,7 +1173,10 @@ async function* parseDbsCsvStream(
     if (row.length === 2) {
       const [prop, value] = row;
       if (prop === "Account Details For:") {  
-        account = value;
+        const match = value.search(/[0-9]/);
+        const accountLabel = value.slice(0, match).trim();
+        const accountNumber = value.slice(match);
+        account = `${accountLabel} ${accountNumber}`;
       }
       continue;
     }
