@@ -1,20 +1,5 @@
 import { type BrowserContext, chromium, type Page } from "playwright";
 
-function hideApp(appName: string) {
-  const scpt = `
-  tell application "System Events" to \
-  set visible of application process "${appName}" to false`;
-
-  try {
-    const command = new Deno.Command("osascript", {
-      args: ["-e", scpt],
-    });
-    command.spawn();
-  } catch (_e) {
-    // do nothing
-  }
-}
-
 export interface DisposablePage extends Page {
   [Symbol.asyncDispose](): Promise<void>;
 }
@@ -24,10 +9,10 @@ function launchPersistentContext(profilePath: string): Promise<BrowserContext> {
     channel: "chrome",
     headless: false,
     args: [
-      "--disable-blink-features=AutomationControlled",
-      "--hide-crash-restore-bubble",
+      // "--disable-blink-features=AutomationControlled",
+      // "--hide-crash-restore-bubble",
     ],
-    ignoreDefaultArgs: ["--enable-automation"],
+    // ignoreDefaultArgs: ["--enable-automation"],
   });
 }
 
@@ -39,7 +24,6 @@ export function createBrowserContext(
     async createPage() {
       if (!context) context = await launchPersistentContext(profilePath);
       const page = await context.newPage();
-      hideApp("Google Chrome");
       page[Symbol.asyncDispose] = () => page.close();
       return page as DisposablePage;
     },

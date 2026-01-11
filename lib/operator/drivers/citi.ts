@@ -16,7 +16,7 @@ waitFor #cmlink_lk_myCiti - if not there, then scraping was detected
 async function waitOrRefresh(
   page: Page,
   locatorString: string,
-  timeout = 7000,
+  timeout = 90000,
   retries = 5,
 ): Promise<void> {
   const locator = page.locator(locatorString);

@@ -41,7 +41,7 @@ export interface Config {
   outputPath: string;
   consolidatedPath: string;
   sources: SourceParams[];
-  schedule: ScheduleParams
+  schedule: ScheduleParams;
   rulesPath: string;
   xlsx: string;
   pushover?: PushoverConfigParams;
@@ -80,10 +80,16 @@ async function fetch1PasswordItem(
 
   const { category } = item;
   if (category === "LOGIN") {
+    let website = "";
+    if (item.urls.length === 1) {
+      website = item.urls[0].href;
+    } else {
+      website = item.urls.find(
+        (f: { primary: boolean; href: string }) => f.primary,
+      ).href;
+    }
     return {
-      website: item.urls.find((f: { primary: boolean; href: string }) =>
-        f.primary
-      ).href,
+      website,
       username: field("username"),
       password: field("password"),
     };

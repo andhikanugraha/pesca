@@ -212,7 +212,6 @@ input[type="submit"],
 input[type="reset"],
 input[type="button"] {
 	font-size: 1rem;
-	display: inline-block;
 	padding: 6px 12px;
 	text-align: center;
 	text-decoration: none;

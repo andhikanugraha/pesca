@@ -1,7 +1,4 @@
-import {
-  type SourceParams,
-  writeFile,
-} from "./lib.ts";
+import { type SourceParams, writeFile } from "./lib.ts";
 import { logger } from "../logger.ts";
 
 import type { Config } from "../config.ts";
@@ -45,14 +42,18 @@ async function processSource({ source, createPage, artifactBasePath, notify }: {
 
   const childLogger = logger.child({ sourceKey: key });
 
-  async function storeArtifact(name: string, contents: string | Uint8Array | ReadableStream<Uint8Array>) {
+  async function storeArtifact(
+    name: string,
+    contents: string | Uint8Array | ReadableStream<Uint8Array>,
+  ) {
     childLogger.info(`Storing artifact ${name}`);
     await writeFile(join(artifactBasePath, key, name), contents);
   }
 
-  const sourceNotify: NotifyFn = (
-    { message, title = key, device = source.device },
-  ) => notify({ message, title, device });
+  const { device } = source;
+  const base = device ? { device } : null;
+  const sourceNotify: NotifyFn = ({ message, title = key }) =>
+    notify({ ...base, message, title });
 
   const driverParams = {
     source,

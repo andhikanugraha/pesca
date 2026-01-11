@@ -7,6 +7,9 @@ import { type Operator } from "../operator/operator.ts";
 import { type Config } from "../config.ts";
 import { forwardServer, type NgrokConfig } from "./ngrok.ts";
 import { logger } from "../logger.ts";
+import { html } from "./helpers.ts";
+import { Commands, Layout } from "./layout.ts";
+import { EnrichedTransaction } from "../operator/consolidate.ts";
 
 function serveFile(path: string) {
   const relativePath = relative(
@@ -14,66 +17,6 @@ function serveFile(path: string) {
     resolve(import.meta.dirname || "", path),
   );
   return serveStatic({ path: relativePath });
-}
-
-// html tag function to trim and remove preceding whitespace
-function html(strings: TemplateStringsArray, ...values: unknown[]) {
-  const result = String.raw(strings, ...values);
-  // Remove leading/trailing whitespace and preceding whitespace on each line
-  return result
-    .split("\n")
-    .map((line) => line.trimStart())
-    .join("\n")
-    .trim();
-}
-
-function Layout(children: string) {
-  return html`
-    <!DOCTYPE html>
-    <title>pesca</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/new.css">
-    <link rel="icon" href="/favicon.svg" type="image/svg" />
-    <script src="/relative-time-element.js" type="module"></script>
-    <header>
-    <h1>pesca</h1>
-    </header>
-    ${children}
-  `;
-}
-
-function Commands(sources: { key: string; name: string }[]) {
-  return html`
-    <form action="/run" method="post" onsubmit="showLoadingIndicator()">
-      <p>
-        <button type="submit" name="task" value="run">Run</button>
-        &nbsp;
-        <button type="submit" name="task" value="pull">
-          Pull Only
-        </button>
-        &nbsp;
-        <button type="submit" name="task" value="consolidate">
-          Consolidate Only
-        </button>
-        &nbsp;
-        <button type="submit" name="task" value="abort">
-          Abort
-        </button>
-      </p>
-      <p>
-        <label for="source-select">Pull specific source:</label>
-        <select name="source" id="source-select">
-          <option value="">--Select source--</option>
-          ${sources.map((s) => `<option value="${s.key}">${s.key}</option>`).join("")}
-        </select>
-        <button type="submit" name="task" value="pullSource">Pull Source</button>
-      </p>
-      <progress style="display: none"></progress>
-    </form>
-    <script type="module">
-    function showLoadingIndicator() { document.querySelector("progress").style.display = "block" }
-    </script>
-  `;
 }
 
 function Time(
@@ -98,6 +41,45 @@ function Time(
   `;
 }
 
+// Utility function to read JSON file from disk
+async function readJsonFile<T>(path: string): Promise<T> {
+  const text = await Deno.readTextFile(path);
+  return JSON.parse(text);
+}
+
+// Parses consolidated.json and returns uncategorisedPayees and categories
+async function parseConsolidatedJson(consolidatedPath: string): Promise<{
+  uncategorisedPayees: string[];
+  categories: string[];
+}> {
+  const { transactions } = await readJsonFile<{
+    transactions: EnrichedTransaction[];
+  }>(consolidatedPath);
+
+  // Uncategorised payees
+  const uncategorisedPayees = Array.from(
+    new Set(
+      transactions
+        .filter((tx) =>
+          (!tx.category || tx.category === "") &&
+          (!tx.originalCategory || tx.originalCategory === "") &&
+          tx.payeeName
+        )
+        .map((tx) => tx.payeeName)
+        .filter((v) => v !== undefined),
+    ),
+  );
+  // All categories and originalCategories, deduped and filtered for non-empty
+  const categories = Array.from(
+    new Set(
+      transactions
+        .flatMap((tx) => [tx.category, tx.originalCategory])
+        .filter((cat): cat is string => !!cat && cat !== ""),
+    ),
+  );
+  return { uncategorisedPayees, categories };
+}
+
 export default async function startServer(
   { config, scheduler, operator }: {
     config: Config;
@@ -109,6 +91,7 @@ export default async function startServer(
 
   app.get("/new.css", serveFile("new.css"));
   app.get("/favicon.svg", serveFile("favicon.svg"));
+  app.get("/client.js", serveFile("client.js"));
   app.get("/relative-time-element.js", serveFile("relative-time-element.js"));
 
   app.use(async (c, next) => {
@@ -122,29 +105,38 @@ export default async function startServer(
     const status = c.req.query("status");
     let message = "";
     if (status === "success") {
-      message = `<p>✅ Operation was successful.</p>`;
+      message = html`
+        <status-message>
+          <span slot="icon">✅</span> Operation was successful.
+        </status-message>
+      `;
     } else if (status === "failed") {
-      message = `<p>❌ Operation was not successful.</p>`;
+      message = html`
+        <status-message>
+          <span slot="icon">❌</span> Operation failed.
+        </status-message>
+      `;
     }
     // Pass config.sources to Commands
-    const sources = config.sources?.map((s) => ({ key: s.key, name: String(s.name) })) ?? [];
+    const sources =
+      config.sources?.map((s) => ({ key: s.key, name: String(s.name) })) ?? [];
     return c.render(html`
-      ${message}
-      <table>
-        <tr>
-          <th width="40%">Next occurrence:</th>
-          <td>${Time(nextOccurrence, "future")}</td>
-        </tr>
-        <tr>
-          <th width="40%">Last successful occurrence:</th>
-          <td>${Time(lastSuccessfulOccurrence, "past")}</td>
-        </tr>
-        <tr>
-          <th width="40%">Last failed occurrence:</th>
-          <td>${Time(lastFailedOccurrence, "past")}</td>
-        </tr>
-      </table>
-      ${Commands(sources)}
+      ${Commands(sources)} ${message}
+      <dl>
+        <dt>Next occurrence</dt>
+        <dd>${Time(nextOccurrence, "future")}</dd>
+        ${lastSuccessfulOccurrence
+          ? html`
+            <dt>Last successful occurrence</dt>
+            <dd>${Time(lastSuccessfulOccurrence, "past")}</dd>
+          `
+          : ""} ${lastFailedOccurrence
+          ? html`
+            <dt>Last successful occurrence</dt>
+            <dd>${Time(lastSuccessfulOccurrence, "past")}</dd>
+          `
+          : ""}
+      </dl>
     `);
   });
 
@@ -161,7 +153,9 @@ export default async function startServer(
 
     let success: boolean;
     if (task === "pullSource" && typeof source === "string" && source) {
-      success = await scheduler.run((opts) => operator.pullSource({ source, signal: opts.signal }));
+      success = await scheduler.run(({ signal }) =>
+        operator.pullSource({ source, signal })
+      );
     } else if (task === "pull") {
       success = await scheduler.run(operator.pull);
     } else if (task === "consolidate") {
@@ -182,6 +176,14 @@ export default async function startServer(
     return c.redirect("/");
   });
 
+  // GET route for uncategorized payees
+  app.get("/consolidated", async (c) => {
+    const payees = await parseConsolidatedJson(
+      config.consolidatedPath + "/consolidated.json",
+    );
+    return c.json(payees);
+  });
+
   logger.info("Initiating server");
   const server = Deno.serve({
     onListen({ port, hostname }) {
@@ -191,7 +193,11 @@ export default async function startServer(
 
   if (server && config.ngrok) {
     logger.info("Forwarding to ngrok");
-    await forwardServer({ server, config: config.ngrok as NgrokConfig });
+    const url = await forwardServer({
+      server,
+      config: config.ngrok as NgrokConfig,
+    });
+    logger.info(`Forwarded to ${url}`);
   }
 
   return server;

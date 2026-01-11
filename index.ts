@@ -1,6 +1,5 @@
 import { resolve } from "@std/path";
 import { parse } from "@std/yaml";
-import open from "open";
 import { createOperator } from "./lib/operator/operator.ts";
 import startServer from "./lib/server/server.ts";
 import { createScheduler } from "./lib/scheduler/scheduler.ts";
@@ -33,10 +32,6 @@ async function main(pathToConfigYaml = "pesca.yml") {
     logger.error("Failed to start server.");
     return;
   }
-
-  await open(
-    `http://${config.ngrok?.domain ?? `localhost:${server.addr.port}`}/`,
-  );
 }
 
 if (import.meta.main) {

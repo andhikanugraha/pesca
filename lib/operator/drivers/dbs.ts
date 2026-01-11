@@ -1161,7 +1161,7 @@ function buildRaw(row: string[], indices: HeaderIndices): string[] {
 async function* parseDbsCsvStream(
   readable: ReadableStream<Uint8Array>,
 ): AsyncGenerator<Transaction> {
-  const csv = readable
+  const csv = (readable as ReadableStream<BufferSource>)
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(new CsvParseStream());
 
@@ -1276,6 +1276,7 @@ export default defineDriver({
       throw new Error("No username/password provided.");
     }
 
+    logger.info("Hello from DBS driver!");
     await using page = await createPage();
 
     logger.info("Logging in");

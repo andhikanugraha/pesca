@@ -4,6 +4,9 @@ import * as XLSX from "xlsx";
 import type { EnrichedTransaction } from "../consolidate.ts";
 
 const EXCEL_EPOCH = Temporal.PlainDate.from("1899-12-31");
+const SHEET_NAME_TRANSACTIONS = "Transactions";
+const SHEET_NAME_CATEGORISATION = "Categorisation";
+const SHEET_NAME_NOTES = "Notes";
 
 function toDate(plain: Temporal.PlainDate): Date {
   const zoned = plain.toZonedDateTime(Temporal.Now.timeZoneId());
@@ -15,7 +18,7 @@ async function readWorkbook<T = string | number | undefined>(
 ): Promise<Record<string, T>[]> {
   const u8 = await Deno.readFile(path);
   const workbook = XLSX.read(u8);
-  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  const worksheet = workbook.Sheets[SHEET_NAME_TRANSACTIONS];
   const rows = XLSX.utils.sheet_to_json<Record<string, T>>(worksheet);
   return rows;
 }
@@ -28,11 +31,10 @@ export interface RowWithNotes {
   notes: string;
 }
 
-export async function loadEdits(
-  path: string,
-): Promise<
-  { payeeToCategory: Map<string, string>; notes: Map<string, RowWithNotes> }
-> {
+export async function loadEdits(path: string): Promise<{
+  payeeToCategory: Map<string, string>;
+  notes: Map<string, RowWithNotes>;
+}> {
   const payeeToCategory = new Map<string, string>();
   const notes = new Map<string, RowWithNotes>();
   const rows = await readWorkbook(path);
@@ -50,12 +52,12 @@ export async function loadEdits(
     }
 
     if (Payee && ID && Notes?.trim()) {
-      const date = EXCEL_EPOCH.add({ days: row.Date as unknown as number });
+      const date = EXCEL_EPOCH.add({ days: row.Date as number });
       notes.set(ID, {
         id: ID,
         date,
         payee: Payee,
-        amount: row.Amount as unknown as number,
+        amount: row.Amount as number,
         notes: Notes?.trim(),
       });
     }
@@ -126,7 +128,7 @@ export function generateWorkbook(
     ["Amount", (t) => t.amount, 10],
     ["Category", (t) => t.category, 14],
     ["Notes", (t) => t.notes, 30],
-    ["Statement Date", t => t.statementDate?.toString(), 10],
+    ["Statement Date", (t) => t.statementDate?.toString(), 10],
     ["ID", (t) => t.id, null],
     ["AutoCategory", (t) => t.originalCategory, null],
     ["Description", (t) => t.description, null],
@@ -134,13 +136,13 @@ export function generateWorkbook(
     ["Original Currency Code", (t) => t.originalCurrencyCode, 5],
     ["Original Currency Amount", (t) => t.originalCurrencyAmount, 16],
   ]);
-  XLSX.utils.book_append_sheet(workbook, sheet1, "Transactions");
+  XLSX.utils.book_append_sheet(workbook, sheet1, SHEET_NAME_TRANSACTIONS);
 
   const sheet2 = generateWorksheet([...manualMap.entries()], [
     ["Payee", (e) => e[0], 40],
     ["Category", (e) => e[1], 20],
   ]);
-  XLSX.utils.book_append_sheet(workbook, sheet2, "Categorisation");
+  XLSX.utils.book_append_sheet(workbook, sheet2, SHEET_NAME_CATEGORISATION);
 
   const sheet3 = generateWorksheet([...notes.values()], [
     ["ID", (t) => t.id, 21],
@@ -149,7 +151,7 @@ export function generateWorkbook(
     ["Amount", (t) => t.amount, 10],
     ["Notes", (t) => t.notes, 30],
   ]);
-  XLSX.utils.book_append_sheet(workbook, sheet3, "Notes");
+  XLSX.utils.book_append_sheet(workbook, sheet3, SHEET_NAME_NOTES);
 
   return XLSX.writeXLSX(workbook, { type: "buffer", cellStyles: true });
 }

@@ -13,7 +13,7 @@
     "hono": "jsr:@hono/hono@^4.7.10",
     "open": "npm:open@^10.1.2",
     "pino": "npm:pino@^9.6.0",
-    "playwright": "npm:playwright@^1.52.0",
+    "playwright": "npm:playwright@^1.57.0",
     "postal-mime": "npm:postal-mime@^2.4.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
   },

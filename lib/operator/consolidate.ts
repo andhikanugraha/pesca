@@ -81,9 +81,6 @@ export async function* parseJobArtifacts(
   for (const source of sources) {
     const sourcePath = join(outputPath, jobDirName, source.key);
     if (!await exists(sourcePath, { isDirectory: true })) {
-      logger.warn(
-        `Source path does not exist: ${relative(outputPath, sourcePath)}`,
-      );
       continue;
     }
 
